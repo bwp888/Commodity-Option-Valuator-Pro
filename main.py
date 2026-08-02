@@ -1,53 +1,121 @@
+"""
+Commodity Option Valuator Pro
+-----------------------------
+
+Application Entry Point
+
+Author : Simon
+Version : 0.1.0
+Python  : 3.12
+"""
+
+from __future__ import annotations
+
 import customtkinter as ctk
 
-from ui.styles import init_theme
+from config.settings import (
+    APP_NAME,
+    APP_VERSION,
+    WINDOW_WIDTH,
+    WINDOW_HEIGHT,
+    THEME,
+    COLOR_THEME,
+)
+
+from core.logger import get_logger
 
 
-class App(ctk.CTk):
+# ==========================================================
+# Logger
+# ==========================================================
 
-    def __init__(self):
+logger = get_logger()
 
+
+class CommodityOptionValuatorApp(ctk.CTk):
+    """
+    Main Application Window.
+    """
+
+    def __init__(self) -> None:
         super().__init__()
 
-        self.title("Commodity Option Valuator Pro")
+        logger.info("Initializing application...")
 
-        self.geometry("1600x900")
+        self.initialize_window()
 
-        self.minsize(1400, 850)
+        logger.info("Application initialized successfully.")
 
-        self.create_ui()
+    # ------------------------------------------------------
 
-    def create_ui(self):
+    def initialize_window(self) -> None:
+        """
+        Initialize main window.
+        """
 
-        title = ctk.CTkLabel(
-            self,
-            text="Commodity Option Valuator Pro",
-            font=("微软雅黑", 28, "bold")
-        )
+        self.title(f"{APP_NAME}  v{APP_VERSION}")
 
-        title.pack(pady=20)
+        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
 
-        sub = ctk.CTkLabel(
-            self,
-            text="商品期权智能估值分析系统",
-            font=("微软雅黑", 18)
-        )
+        self.minsize(1200, 800)
 
-        sub.pack()
+        # Window centered
+        self.center_window()
 
-        version = ctk.CTkLabel(
-            self,
-            text="Version 0.1.0",
-            font=("微软雅黑", 14)
-        )
+    # ------------------------------------------------------
 
-        version.pack(pady=5)
+    def center_window(self) -> None:
+        """
+        Center the application window.
+        """
+
+        self.update_idletasks()
+
+        width = self.winfo_width()
+        height = self.winfo_height()
+
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        x = int((screen_width - width) / 2)
+        y = int((screen_height - height) / 2)
+
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
+    # ------------------------------------------------------
+
+    def run(self) -> None:
+        """
+        Start application.
+        """
+
+        logger.info("Application started.")
+
+        self.mainloop()
+
+
+# ==========================================================
+# Main
+# ==========================================================
+
+def main() -> None:
+    """
+    Application entry.
+    """
+
+    logger.info("=" * 60)
+    logger.info(APP_NAME)
+    logger.info(f"Version : {APP_VERSION}")
+    logger.info("=" * 60)
+
+    ctk.set_appearance_mode(THEME)
+
+    ctk.set_default_color_theme(COLOR_THEME)
+
+    app = CommodityOptionValuatorApp()
+
+    app.run()
 
 
 if __name__ == "__main__":
-
-    init_theme()
-
-    app = App()
-
-    app.mainloop()
+    main()
