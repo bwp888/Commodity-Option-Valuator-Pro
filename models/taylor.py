@@ -1,456 +1,184 @@
 """
 Commodity Option Valuator Pro
-=============================
 
-Second Order Taylor Valuation Model
+Second Order Taylor Option Valuation Model
 
-This module provides fast option price estimation
-using Delta and Gamma approximation.
-
-Formula
--------
-
-V_new = V0
-        + Delta * dS
-        + 0.5 * Gamma * dS^2
-
-
-Author : Simon
-Version : 1.0.0
-Python : 3.12
+Version : 1.0.1
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Optional
 
 
 from models.greeks import Greeks
 
 
+@dataclass
+class TaylorResult:
+    """
+    Taylor valuation result.
+    """
 
-# ==========================================================
-# Taylor Valuation Engine
-# ==========================================================
+    base_price: float = 0.0
+
+    delta_adjustment: float = 0.0
+
+    gamma_adjustment: float = 0.0
+
+    estimated_price: float = 0.0
+
 
 
 class TaylorValuator:
     """
-    Second order Taylor option valuation engine.
+    Second order Taylor valuation engine.
 
-    Parameters
-    ----------
-    greeks:
-        Greeks calculation engine.
+    Formula:
 
-    Notes
-    -----
-    Uses existing Delta and Gamma values.
-    Does not recalculate Black-Scholes.
+    V(S+dS)
+
+    =
+    V(S)
+    +
+    Delta*dS
+    +
+    0.5*Gamma*dS²
     """
+
 
 
     def __init__(
         self,
-        greeks: Greeks,
+        greeks: Optional[Greeks] = None,
     ) -> None:
-        """
-        Initialize Taylor model.
-
-        Parameters
-        ----------
-        greeks:
-            Initialized Greeks object.
-        """
 
         self.greeks = greeks
 
 
 
-    # ------------------------------------------------------
-    # Basic Properties
-    # ------------------------------------------------------
-
-
-    @property
-    def option(self):
-        """
-        Underlying option.
-        """
-
-        return self.greeks.option
-
-
-
-    # ------------------------------------------------------
-
-
-    @property
-    def base_price(self) -> float:
-        """
-        Current option theoretical price.
-        """
-
-        return self.greeks.bs.price
-
-
-
-    # ------------------------------------------------------
-
-
-    @property
-    def spot(self) -> float:
-        """
-        Current underlying price.
-        """
-
-        return self.greeks.spot
-
-
-
-    # ------------------------------------------------------
-
-
-    @property
-    def delta(self) -> float:
-        """
-        Delta.
-        """
-
-        return self.greeks.delta
-
-
-
-    # ------------------------------------------------------
-
-
-    @property
-    def gamma(self) -> float:
-        """
-        Gamma.
-        """
-
-        return self.greeks.gamma
-    # ------------------------------------------------------
-    # Spot Change
-    # ------------------------------------------------------
-
-    def spot_change(
+    def calculate(
         self,
-        new_spot: float,
-    ) -> float:
+        current_price: float = 0.0,
+        price_change: float = 0.0,
+        greeks: Optional[Any] = None,
+    ) -> TaylorResult:
         """
-        Calculate underlying price change.
-
-        Parameters
-        ----------
-        new_spot:
-            New underlying price.
-
-        Returns
-        -------
-        float
-            dS
+        Calculate Taylor estimation.
         """
 
-        return new_spot - self.spot
+
+        if greeks is not None:
+            self.greeks = greeks
 
 
-    # ------------------------------------------------------
-    # Delta Contribution
-    # ------------------------------------------------------
+        delta = 0.0
+        gamma = 0.0
 
-    def delta_effect(
-        self,
-        new_spot: float,
-    ) -> float:
-        """
-        First-order Taylor contribution.
 
-        Formula
-        -------
-        Delta * dS
-        """
+        if self.greeks is not None:
 
-        dS = self.spot_change(
-            new_spot
-        )
+            if hasattr(
+                self.greeks,
+                "delta"
+            ):
+                delta = float(
+                    self.greeks.delta
+                )
 
-        return (
-            self.delta
+            elif isinstance(
+                self.greeks,
+                dict
+            ):
+                delta = float(
+                    self.greeks.get(
+                        "delta",
+                        0
+                    )
+                )
+
+
+
+            if hasattr(
+                self.greeks,
+                "gamma"
+            ):
+                gamma = float(
+                    self.greeks.gamma
+                )
+
+            elif isinstance(
+                self.greeks,
+                dict
+            ):
+                gamma = float(
+                    self.greeks.get(
+                        "gamma",
+                        0
+                    )
+                )
+
+
+        delta_adjustment = (
+            delta
             *
-            dS
+            price_change
         )
 
 
-    # ------------------------------------------------------
-    # Gamma Contribution
-    # ------------------------------------------------------
-
-    def gamma_effect(
-        self,
-        new_spot: float,
-    ) -> float:
-        """
-        Second-order Gamma contribution.
-
-        Formula
-        -------
-        0.5 * Gamma * dS^2
-        """
-
-        dS = self.spot_change(
-            new_spot
-        )
-
-        return (
+        gamma_adjustment = (
             0.5
             *
-            self.gamma
+            gamma
             *
-            dS ** 2
+            price_change ** 2
         )
 
 
-    # ------------------------------------------------------
-    # First Order Taylor
-    # ------------------------------------------------------
-
-    def first_order(
-        self,
-        new_spot: float,
-    ) -> float:
-        """
-        First-order Taylor estimation.
-
-        Formula
-        -------
-        V0 + Delta*dS
-        """
-
-        return (
-            self.base_price
+        estimated_price = (
+            current_price
             +
-            self.delta_effect(
-                new_spot
-            )
+            delta_adjustment
+            +
+            gamma_adjustment
         )
 
 
-    # ------------------------------------------------------
-    # Second Order Taylor
-    # ------------------------------------------------------
+        return TaylorResult(
 
-    def second_order(
-        self,
-        new_spot: float,
-    ) -> float:
-        """
-        Second-order Taylor estimation.
+            base_price=current_price,
 
-        Formula
-        -------
-        V0
-        + Delta*dS
-        + 0.5*Gamma*dS²
-        """
+            delta_adjustment=delta_adjustment,
 
-        return (
-            self.base_price
-            +
-            self.delta_effect(
-                new_spot
-            )
-            +
-            self.gamma_effect(
-                new_spot
-            )
+            gamma_adjustment=gamma_adjustment,
+
+            estimated_price=estimated_price,
         )
 
 
-    # ------------------------------------------------------
-    # Main Estimator
-    # ------------------------------------------------------
 
+    @staticmethod
     def estimate(
-        self,
-        new_spot: float,
-    ) -> dict[str, float]:
-        """
-        Estimate option price after spot movement.
+        greeks: Greeks,
+        current_price: float,
+        price_change: float,
+    ) -> TaylorResult:
 
-        Parameters
-        ----------
-        new_spot:
-            New underlying price.
 
-        Returns
-        -------
-        dict
-            Taylor estimation result.
-        """
-
-        dS = self.spot_change(
-            new_spot
+        model = TaylorValuator(
+            greeks
         )
 
 
-        delta_value = self.delta_effect(
-            new_spot
+        return model.calculate(
+            current_price=current_price,
+            price_change=price_change,
         )
 
 
-        gamma_value = self.gamma_effect(
-            new_spot
-        )
-
-
-        return {
-            "base_price": self.base_price,
-
-            "old_spot": self.spot,
-
-            "new_spot": new_spot,
-
-            "spot_change": dS,
-
-            "delta_effect": delta_value,
-
-            "gamma_effect": gamma_value,
-
-            "first_order_price": (
-                self.first_order(
-                    new_spot
-                )
-            ),
-
-            "second_order_price": (
-                self.second_order(
-                    new_spot
-                )
-            ),
-        }
-    # ------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------
-
-    def validate_spot(
-        self,
-        new_spot: float,
-    ) -> None:
-        """
-        Validate new underlying price.
-
-        Parameters
-        ----------
-        new_spot:
-            Target spot price.
-
-        Raises
-        ------
-        ValueError
-            If spot price is invalid.
-        """
-
-        if new_spot <= 0:
-
-            raise ValueError(
-                "Spot price must be positive."
-            )
-
-
-    # ------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------
-
-    def summary(
-        self,
-        new_spot: float,
-    ) -> dict[str, Any]:
-        """
-        Return complete Taylor valuation result.
-
-        Parameters
-        ----------
-        new_spot:
-            Target underlying price.
-
-        Returns
-        -------
-        dict
-            Taylor estimation summary.
-        """
-
-        self.validate_spot(
-            new_spot
-        )
-
-        return self.estimate(
-            new_spot
-        )
-
-
-    # ------------------------------------------------------
-    # Dictionary Export
-    # ------------------------------------------------------
-
-    def to_dict(
-        self,
-        new_spot: float,
-    ) -> dict[str, Any]:
-        """
-        Export Taylor result.
-
-        Parameters
-        ----------
-        new_spot:
-            Target price.
-
-        Returns
-        -------
-        dict
-        """
-
-        return self.summary(
-            new_spot
-        )
-
-
-    # ------------------------------------------------------
-    # String Representation
-    # ------------------------------------------------------
-
-    def __str__(self) -> str:
-        """
-        Human-readable representation.
-        """
-
-        return (
-            "TaylorValuator("
-            f"spot={self.spot:.4f}, "
-            f"price={self.base_price:.6f}"
-            ")"
-        )
-
-
-    # ------------------------------------------------------
-
-    def __repr__(self) -> str:
-        """
-        Developer representation.
-        """
-
-        return (
-            "TaylorValuator("
-            f"option={self.option!r}"
-            ")"
-        )
-
-
-# ==========================================================
-# Public Exports
-# ==========================================================
 
 __all__ = [
+    "TaylorResult",
     "TaylorValuator",
 ]

@@ -67,9 +67,11 @@ from typing import (
 
 class OptionDirection(Enum):
     """
-    Option type.
-    """
+    Option Type.
+    
+    Current pipeline uses CALL / PUT as option direction identifier.
 
+    """
     CALL = "CALL"
 
     PUT = "PUT"

@@ -1,495 +1,375 @@
 """
 Commodity Option Valuator Pro
-=============================
 
-Greeks Calculation Engine
+Greeks calculation module.
 
-This module provides first-order option Greeks based on the
-Black-Scholes pricing model.
-
-Implemented Greeks
-------------------
+Support:
 - Delta
 - Gamma
-- Theta (per day, 365-day convention)
+- Theta (365 days)
 - Vega
 - Rho
-- Elasticity (Lambda)
-
-Author : Simon
-Version : 1.0.0
-Python  : 3.12
+- Elasticity
 """
 
 from __future__ import annotations
 
-from typing import Any
+import math
+
+from scipy.stats import norm
+
+from models.option import (
+    OptionType,
+    OptionDirection,
+)
 
 from models.black_scholes import BlackScholes
 
 
-# ==========================================================
-# Greeks Engine
-# ==========================================================
-
-
 class Greeks:
     """
-    Black-Scholes Greeks calculation engine.
-
-    Parameters
-    ----------
-    black_scholes
-        Initialized BlackScholes pricing engine.
-
-    Notes
-    -----
-    This class never recalculates d1, d2 or other intermediate
-    variables.
-
-    All mathematical values are reused directly from the
-    BlackScholes engine.
+    Option Greeks calculator.
     """
 
-    DAYS_PER_YEAR: float = 365.0
+    DAYS_PER_YEAR = 365
 
-    # ------------------------------------------------------
 
-    def __init__(
-        self,
-        black_scholes: BlackScholes,
-    ) -> None:
+    def __init__(self, option):
+
         """
-        Initialize Greeks engine.
+        Accept:
 
-        Parameters
-        ----------
-        black_scholes
-            Initialized pricing engine.
+        Option
+        or
+        BlackScholes instance
         """
 
-        self.bs = black_scholes
+        if hasattr(option, "option"):
 
-    # ------------------------------------------------------
-    # Public Shortcuts
-    # ------------------------------------------------------
+            # BlackScholes instance
+            self.bs = option
 
-    @property
-    def option(self):
-        """
-        Return underlying Option object.
-        """
+            self.option = option.option
 
-        return self.bs.option
+        else:
 
-    # ------------------------------------------------------
+            # Option instance
+            self.option = option
 
-    @property
-    def spot(self) -> float:
-        """
-        Underlying spot price.
-        """
+            self.bs = BlackScholes(option)
 
-        return self.option.spot
 
-    # ------------------------------------------------------
-
-    @property
-    def strike(self) -> float:
-        """
-        Strike price.
-        """
-
-        return self.option.strike
-
-    # ------------------------------------------------------
-
-    @property
-    def maturity(self) -> float:
-        """
-        Time to maturity (years).
-        """
-
-        return self.option.maturity
-
-    # ------------------------------------------------------
-
-    @property
-    def rate(self) -> float:
-        """
-        Risk-free interest rate.
-        """
-
-        return self.option.rate
-
-    # ------------------------------------------------------
-
-    @property
-    def volatility(self) -> float:
-        """
-        Annualized volatility.
-        """
-
-        return self.option.volatility
-
-    # ------------------------------------------------------
-
-    @property
-    def d1(self) -> float:
-        """
-        Cached Black-Scholes d1.
-        """
-
-        return self.bs.d1
-
-    # ------------------------------------------------------
-
-    @property
-    def d2(self) -> float:
-        """
-        Cached Black-Scholes d2.
-        """
-
-        return self.bs.d2
-
-    # ------------------------------------------------------
-
-    @property
-    def pdf_d1(self) -> float:
-        """
-        Standard normal PDF evaluated at d1.
-        """
-
-        return self.bs.pdf(self.d1)
-
-    # ------------------------------------------------------
-
-    @property
-    def discount_factor(self) -> float:
-        """
-        Discount factor.
-
-        exp(-rT)
-        """
-
-        return self.bs.discount_factor
-
-    # ------------------------------------------------------
-
-    @property
-    def is_call(self) -> bool:
-        """
-        True if option is Call.
-        """
-
-        return self.option.is_call
-
-    # ------------------------------------------------------
-
-    @property
-    def is_put(self) -> bool:
-        """
-        True if option is Put.
-        """
-
-        return self.option.is_put
-            # ------------------------------------------------------
-    # Delta
-    # ------------------------------------------------------
-
-    @property
-    def delta(self) -> float:
-        """
-        First-order sensitivity to the underlying price.
-
-        Returns
-        -------
-        float
-            Delta of the option.
-        """
-
-        if self.is_call:
-            return self.bs.cdf(self.d1)
-
-        return self.bs.cdf(self.d1) - 1.0
-
-    # ------------------------------------------------------
-    # Gamma
-    # ------------------------------------------------------
-
-    @property
-    def gamma(self) -> float:
-        """
-        Second-order sensitivity to the underlying price.
-
-        Returns
-        -------
-        float
-            Gamma of the option.
-        """
-
-        denominator = (
-            self.spot
-            * self.volatility
-            * (self.maturity ** 0.5)
+        self.spot = float(
+            self.option.spot
         )
 
-        return self.pdf_d1 / denominator
-
-    # ------------------------------------------------------
-    # Common Factors
-    # ------------------------------------------------------
-
-    @property
-    def sqrt_maturity(self) -> float:
-        """
-        Square root of maturity.
-        """
-
-        return self.maturity ** 0.5
-
-    # ------------------------------------------------------
-
-    @property
-    def vega_factor(self) -> float:
-        """
-        Common factor shared by Vega and Theta.
-
-        S · φ(d1) · √T
-        """
-
-        return (
-            self.spot
-            * self.pdf_d1
-            * self.sqrt_maturity
+        self.strike = float(
+            self.option.strike
         )
 
-    # ------------------------------------------------------
+        self.maturity = float(
+            self.option.maturity
+        )
+
+        self.rate = float(
+            self.option.rate
+        )
+
+        self.volatility = float(
+            self.option.volatility
+        )
+
 
     @property
-    def theta_decay(self) -> float:
-        """
-        Common decay term.
-
-        S · φ(d1) · σ / (2√T)
-        """
+    def _d1(self):
 
         return (
-            self.spot
-            * self.pdf_d1
-            * self.volatility
-            / (
-                2.0
-                * self.sqrt_maturity
+            math.log(
+                self.spot / self.strike
             )
+            +
+            (
+                self.rate
+                +
+                self.volatility ** 2 / 2
+            )
+            *
+            self.maturity
+        ) / (
+            self.volatility
+            *
+            math.sqrt(self.maturity)
         )
-    # ------------------------------------------------------
-    # Theta
-    # ------------------------------------------------------
+
 
     @property
-    def theta(self) -> float:
-        """
-        Daily Theta using the 365-day convention.
+    def _d2(self):
 
-        Returns
-        -------
-        float
-            Daily time decay.
-        """
+        return (
+            self._d1
+            -
+            self.volatility
+            *
+            math.sqrt(self.maturity)
+        )
 
-        if self.is_call:
 
-            annual_theta = (
-                -self.theta_decay
-                - self.rate
-                * self.strike
-                * self.discount_factor
-                * self.bs.cdf(self.d2)
+    @property
+    def delta(self):
+
+        if self.option.option_type == OptionType.CALL:
+
+            value = norm.cdf(
+                self._d1
             )
 
         else:
 
-            annual_theta = (
-                -self.theta_decay
-                + self.rate
-                * self.strike
-                * self.discount_factor
-                * self.bs.cdf(-self.d2)
+            value = (
+                norm.cdf(self._d1)
+                -
+                1
             )
 
-        return annual_theta / self.DAYS_PER_YEAR
 
-    # ------------------------------------------------------
-    # Vega
-    # ------------------------------------------------------
+        if self.option.direction == OptionDirection.SHORT:
 
-    @property
-    def vega(self) -> float:
-        """
-        Vega.
+            value = -value
 
-        Returns
-        -------
-        float
-            Sensitivity to volatility.
 
-        Notes
-        -----
-        Returned for a volatility change of 1.00
-        (100%), not 1%.
-        """
+        return float(value)
 
-        return self.vega_factor
 
-    # ------------------------------------------------------
-    # Rho
-    # ------------------------------------------------------
 
     @property
-    def rho(self) -> float:
-        """
-        Rho.
+    def gamma(self):
 
-        Returns
-        -------
-        float
-            Sensitivity to interest rate.
-        """
-
-        factor = (
-            self.strike
-            * self.maturity
-            * self.discount_factor
+        value = (
+            norm.pdf(self._d1)
+            /
+            (
+                self.spot
+                *
+                self.volatility
+                *
+                math.sqrt(self.maturity)
+            )
         )
 
-        if self.is_call:
+        return float(value)
 
-            return (
-                factor
-                * self.bs.cdf(self.d2)
+
+
+    @property
+    def vega(self):
+
+        value = (
+            self.spot
+            *
+            norm.pdf(self._d1)
+            *
+            math.sqrt(self.maturity)
+        )
+
+
+        if self.option.direction == OptionDirection.SHORT:
+
+            value = -value
+
+
+        return float(value)
+
+
+
+    @property
+    def theta(self):
+
+        first = (
+            -
+            self.spot
+            *
+            norm.pdf(self._d1)
+            *
+            self.volatility
+            /
+            (
+                2
+                *
+                math.sqrt(self.maturity)
+            )
+        )
+
+
+        if self.option.option_type == OptionType.CALL:
+
+            second = (
+                self.rate
+                *
+                self.strike
+                *
+                math.exp(
+                    -self.rate * self.maturity
+                )
+                *
+                norm.cdf(
+                    self._d2
+                )
             )
 
-        return (
-            -factor
-            * self.bs.cdf(-self.d2)
+            value = first - second
+
+
+        else:
+
+            second = (
+                self.rate
+                *
+                self.strike
+                *
+                math.exp(
+                    -self.rate * self.maturity
+                )
+                *
+                norm.cdf(
+                    -self._d2
+                )
+            )
+
+            value = first + second
+
+
+
+        value = (
+            value
+            /
+            self.DAYS_PER_YEAR
         )
 
-    # ------------------------------------------------------
-    # Elasticity (Lambda)
-    # ------------------------------------------------------
+
+        if self.option.direction == OptionDirection.SHORT:
+
+            value = -value
+
+
+        return float(value)
+
+
 
     @property
-    def elasticity(self) -> float:
+    def rho(self):
+
+        if self.option.option_type == OptionType.CALL:
+
+            value = (
+                self.strike
+                *
+                self.maturity
+                *
+                math.exp(
+                    -self.rate * self.maturity
+                )
+                *
+                norm.cdf(
+                    self._d2
+                )
+            )
+
+        else:
+
+            value = (
+                -
+                self.strike
+                *
+                self.maturity
+                *
+                math.exp(
+                    -self.rate * self.maturity
+                )
+                *
+                norm.cdf(
+                    -self._d2
+                )
+            )
+
+
+        if self.option.direction == OptionDirection.SHORT:
+
+            value = -value
+
+
+        return float(value)
+
+
+
+    @property
+    def elasticity(self):
+
         """
-        Elasticity (Lambda).
-
-        Returns
-        -------
-        float
-            Percentage leverage.
-
-        Notes
-        -----
-        Lambda = Delta × Spot / Option Price
+        Price elasticity.
         """
 
-        price = self.bs.price
+        if self.bs.price == 0:
 
-        if abs(price) < 1.0e-12:
             return 0.0
 
-        return (
+
+        return float(
             self.delta
-            * self.spot
-            / price
+            *
+            self.spot
+            /
+            self.bs.price
         )
-    # ------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------
 
-    def summary(self) -> dict[str, Any]:
+
+
+    def summary(self):
+
         """
-        Return Greeks summary.
-
-        Returns
-        -------
-        dict
-            Greeks information.
+        Complete Greeks summary.
         """
 
         return {
-            "option_type": (
-                self.option.option_type.value
-            ),
-            "spot": self.spot,
-            "strike": self.strike,
-            "maturity": self.maturity,
-            "rate": self.rate,
-            "volatility": self.volatility,
 
-            "price": self.bs.price,
+            "price": float(
+                self.bs.price
+            ),
 
             "delta": self.delta,
+
             "gamma": self.gamma,
+
             "theta": self.theta,
+
             "vega": self.vega,
+
             "rho": self.rho,
 
             "elasticity": self.elasticity,
+
         }
 
-    # ------------------------------------------------------
-    # Dictionary Export
-    # ------------------------------------------------------
 
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Convert Greeks result to dictionary.
 
-        Returns
-        -------
-        dict
-        """
+    def to_dict(self):
 
         return self.summary()
 
-    # ------------------------------------------------------
-    # String Representation
-    # ------------------------------------------------------
 
-    def __str__(self) -> str:
-        """
-        Human-readable representation.
-        """
+
+    def __str__(self):
 
         return (
             "Greeks("
-            f"type={self.option.option_type.value}, "
+            f"price={self.bs.price:.6f}, "
             f"delta={self.delta:.6f}, "
             f"gamma={self.gamma:.6f}, "
-            f"theta={self.theta:.6f}"
-            ")"
-        )
-
-    # ------------------------------------------------------
-
-    def __repr__(self) -> str:
-        """
-        Developer representation.
-        """
-
-        return (
-            "Greeks("
-            f"option={self.option!r}"
-            ")"
+            f"theta={self.theta:.6f}, "
+            f"vega={self.vega:.6f}, "
+            f"rho={self.rho:.6f})"
         )
 
 
-# ==========================================================
-# Public Exports
-# ==========================================================
+    def __repr__(self):
 
-__all__ = [
-    "Greeks",
-]
+        return self.__str__()
