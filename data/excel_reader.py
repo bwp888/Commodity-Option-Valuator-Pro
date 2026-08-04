@@ -7,8 +7,11 @@ Excel Market Data Reader
 Read option chain data exported
 from Wenhua Finance Excel.
 
+Convert Excel rows into unified
+OptionQuote data objects.
+
 Author : Simon
-Version : 1.0.1
+Version : 1.1.0
 """
 
 
@@ -23,51 +26,39 @@ from typing import Any
 import pandas as pd
 
 
-from models.option_scanner import (
-    OptionContract,
-    OptionDirection,
+from data.option_chain import (
+    OptionQuote,
 )
-
-
-
-# ==========================================================
-# Excel Reader
-# ==========================================================
 
 
 class ExcelOptionReader:
     """
     Excel option chain reader.
 
-    Expected columns:
+    Excel columns:
 
     symbol
-    direction
+    underlying
+    option_type
     strike
     price
     volume
     open_interest
     bid
     ask
+    iv
 
     """
-
-
 
     REQUIRED_COLUMNS = [
 
         "symbol",
 
-        "direction",
-
         "strike",
 
         "price",
 
-        "volume",
-
     ]
-
 
 
     def __init__(
@@ -75,53 +66,38 @@ class ExcelOptionReader:
         filepath: str | Path,
     ) -> None:
 
-
         self.filepath = Path(
             filepath
         )
 
-
         self.dataframe: pd.DataFrame | None = None
 
 
-
-    # ------------------------------------------------------
+    # ======================================================
     # Safe Convert
-    # ------------------------------------------------------
+    # ======================================================
 
     @staticmethod
     def _safe_float(
         value: Any,
         default: float = 0.0,
     ) -> float:
-        """
-        Convert value to float safely.
-
-        Handle:
-        - NaN
-        - None
-        - empty string
-        """
 
         if value is None:
-
             return default
 
 
         if pd.isna(value):
-
             return default
 
 
         try:
-
             return float(value)
 
         except (
             ValueError,
             TypeError,
         ):
-
             return default
 
 
@@ -131,56 +107,45 @@ class ExcelOptionReader:
         value: Any,
         default: int = 0,
     ) -> int:
-        """
-        Convert value to int safely.
-        """
 
         if value is None:
-
             return default
 
 
         if pd.isna(value):
-
             return default
 
 
         try:
-
-            return int(
-                float(value)
-            )
+            return int(float(value))
 
         except (
             ValueError,
             TypeError,
         ):
-
             return default
 
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # Load Excel
-    # ------------------------------------------------------
+    # ======================================================
 
     def load(
         self,
     ) -> pd.DataFrame:
 
-
         self.dataframe = pd.read_excel(
             self.filepath
         )
-
 
         return self.dataframe
 
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # Validate
-    # ------------------------------------------------------
+    # ======================================================
 
     def validate(
         self,
@@ -189,37 +154,31 @@ class ExcelOptionReader:
 
 
         if dataframe is None:
-
             dataframe = self.dataframe
 
 
-
         if dataframe is None:
-
             return False
-
 
 
         for column in self.REQUIRED_COLUMNS:
 
             if column not in dataframe.columns:
-
                 return False
-
 
 
         return True
 
 
 
-    # ------------------------------------------------------
-    # Normalize Direction
-    # ------------------------------------------------------
+    # ======================================================
+    # Option Type Parse
+    # ======================================================
 
-    def parse_direction(
-        self,
+    @staticmethod
+    def parse_option_type(
         value: Any,
-    ) -> OptionDirection:
+    ) -> str:
 
 
         text = str(
@@ -229,54 +188,40 @@ class ExcelOptionReader:
 
 
         if text in (
-
             "CALL",
-
             "C",
-
             "看涨",
-
             "涨",
-
         ):
-
-            return OptionDirection.CALL
+            return "CALL"
 
 
 
         if text in (
-
             "PUT",
-
             "P",
-
             "看跌",
-
             "跌",
-
         ):
-
-            return OptionDirection.PUT
-
-
-
-        raise ValueError(
-            f"Unknown option direction: {value}"
-        )
+            return "PUT"
 
 
 
-    # ------------------------------------------------------
+        return "CALL"
+
+
+
+    # ======================================================
     # Convert Row
-    # ------------------------------------------------------
+    # ======================================================
 
-    def row_to_contract(
+    def row_to_quote(
         self,
         row: pd.Series,
-    ) -> OptionContract:
+    ) -> OptionQuote:
 
 
-        return OptionContract(
+        return OptionQuote(
 
             symbol=str(
                 row.get(
@@ -286,14 +231,23 @@ class ExcelOptionReader:
             ),
 
 
-
-            direction=self.parse_direction(
+            underlying=str(
                 row.get(
-                    "direction",
+                    "underlying",
                     "",
                 )
             ),
 
+
+            option_type=self.parse_option_type(
+                row.get(
+                    "option_type",
+                    row.get(
+                        "direction",
+                        "CALL",
+                    )
+                )
+            ),
 
 
             strike=self._safe_float(
@@ -303,13 +257,25 @@ class ExcelOptionReader:
             ),
 
 
-
-            price=self._safe_float(
+            last_price=self._safe_float(
                 row.get(
                     "price"
                 )
             ),
 
+
+            bid_price=self._safe_float(
+                row.get(
+                    "bid"
+                )
+            ),
+
+
+            ask_price=self._safe_float(
+                row.get(
+                    "ask"
+                )
+            ),
 
 
             volume=self._safe_int(
@@ -319,7 +285,6 @@ class ExcelOptionReader:
             ),
 
 
-
             open_interest=self._safe_int(
                 row.get(
                     "open_interest"
@@ -327,18 +292,9 @@ class ExcelOptionReader:
             ),
 
 
-
-            bid=self._safe_float(
+            implied_volatility=self._safe_float(
                 row.get(
-                    "bid"
-                )
-            ),
-
-
-
-            ask=self._safe_float(
-                row.get(
-                    "ask"
+                    "iv"
                 )
             ),
 
@@ -346,14 +302,14 @@ class ExcelOptionReader:
 
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # Convert DataFrame
-    # ------------------------------------------------------
+    # ======================================================
 
-    def dataframe_to_contracts(
+    def dataframe_to_quotes(
         self,
         dataframe: pd.DataFrame | None = None,
-    ) -> list[OptionContract]:
+    ) -> list[OptionQuote]:
 
 
         if dataframe is None:
@@ -372,38 +328,37 @@ class ExcelOptionReader:
 
 
 
-        contracts = []
+        quotes: list[OptionQuote] = []
 
 
 
         for _, row in dataframe.iterrows():
 
-            contracts.append(
+            quotes.append(
 
-                self.row_to_contract(
+                self.row_to_quote(
                     row
                 )
 
             )
 
 
-
-        return contracts
-
+        return quotes
 
 
-    # ------------------------------------------------------
-    # Read Contracts
-    # ------------------------------------------------------
 
-    def read_contracts(
+    # ======================================================
+    # Read Quotes
+    # ======================================================
+
+    def read_quotes(
         self,
-    ) -> list[OptionContract]:
+    ) -> list[OptionQuote]:
 
 
         dataframe = self.load()
 
 
-        return self.dataframe_to_contracts(
+        return self.dataframe_to_quotes(
             dataframe
         )
