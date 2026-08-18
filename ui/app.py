@@ -4,18 +4,23 @@ Commodity Option Valuator Pro
 
 Application UI Container.
 
-Commit 0011
+Commit 0012
 ------------
 
-Connect option scanner workspace.
+Connect option scanner workspace with
+the unified market-data adapter boundary.
 
 Author : Simon
-Version : 0.3.0
+Version : 0.3.1
 """
 
 from __future__ import annotations
 
 import customtkinter as ctk
+
+from models.option_scanner import (
+    OptionContract,
+)
 
 from ui.components import (
     PlaceholderPage,
@@ -75,6 +80,7 @@ class ApplicationFrame(ctk.CTkFrame):
     - Header
     - Page lifecycle
     - Application status
+    - Market-data injection
     """
 
     def __init__(
@@ -344,6 +350,128 @@ class ApplicationFrame(ctk.CTkFrame):
             "ready",
             "系统就绪",
         )
+
+    # ======================================================
+    # Market Data Injection
+    # ======================================================
+
+    def set_market_contracts(
+        self,
+        contracts: list[OptionContract],
+    ) -> None:
+        """
+        Inject normalized market-data contracts
+        into the option scanner workspace.
+
+        The ApplicationFrame does not know where
+        the data came from.
+
+        Data source examples
+        --------------------
+        - Excel
+        - TDX
+        - DDE
+        - Future market-data providers
+
+        Parameters
+        ----------
+        contracts:
+            Normalized OptionContract list.
+        """
+
+        if "scanner" not in self.page_widgets:
+
+            self.page_widgets[
+                "scanner"
+            ] = self.create_page(
+                "scanner"
+            )
+
+        scanner_page = self.page_widgets[
+            "scanner"
+        ]
+
+        if not isinstance(
+            scanner_page,
+            ScannerPage,
+        ):
+            raise TypeError(
+                "scanner 页面类型错误。"
+            )
+
+        scanner_page.set_contracts(
+            contracts
+        )
+
+        self.set_status(
+            "ready",
+            f"已载入 {len(contracts)} 个期权合约",
+        )
+
+    # ======================================================
+    # Market Data Access
+    # ======================================================
+
+    def get_market_contracts(
+        self,
+    ) -> list[OptionContract]:
+        """
+        Return currently loaded option contracts.
+
+        Returns an empty list when the scanner
+        page has not yet been created.
+        """
+
+        scanner_page = (
+            self.page_widgets.get(
+                "scanner"
+            )
+        )
+
+        if not isinstance(
+            scanner_page,
+            ScannerPage,
+        ):
+            return []
+
+        return list(
+            scanner_page.contracts
+        )
+
+    # ======================================================
+    # Scanner Access
+    # ======================================================
+
+    def get_scanner_page(
+        self,
+    ) -> ScannerPage:
+        """
+        Return the ScannerPage instance.
+
+        The scanner page is created lazily.
+        """
+
+        if "scanner" not in self.page_widgets:
+
+            self.page_widgets[
+                "scanner"
+            ] = self.create_page(
+                "scanner"
+            )
+
+        scanner_page = self.page_widgets[
+            "scanner"
+        ]
+
+        if not isinstance(
+            scanner_page,
+            ScannerPage,
+        ):
+            raise TypeError(
+                "scanner 页面类型错误。"
+            )
+
+        return scanner_page
 
     # ======================================================
     # Status
