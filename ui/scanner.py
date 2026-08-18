@@ -4,18 +4,23 @@ Commodity Option Valuator Pro
 
 Option Scanner Workspace.
 
-Commit 0011
+Commit 0013
 ------------
 
-Connect the option scanner model with the UI.
+Connect the option scanner workspace with
+the market data adapter.
 
 Author : Simon
-Version : 0.3.0
+Version : 0.3.2
 """
 
 from __future__ import annotations
 
 import customtkinter as ctk
+
+from data.market_data_adapter import (
+    MarketDataAdapter,
+)
 
 from models.option_scanner import (
     OptionContract,
@@ -50,17 +55,18 @@ class ScannerPage(ctk.CTkFrame):
     """
     Option chain scanner workspace.
 
-    Commit 0011 connects the UI with the existing
-    OptionScanner model.
+    Commit 0013 connects the UI with the existing
+    MarketDataAdapter and OptionScanner.
 
     Responsibilities
     ----------------
     - Collect scanner parameters.
+    - Load and normalize market data.
     - Build scanner contracts.
     - Execute option chain scanning.
     - Display selected CALL / PUT contracts.
     - Provide a stable UI boundary for future
-      market-data integration.
+      market-data source integration.
     """
 
     RESULT_COLUMNS = (
@@ -114,6 +120,10 @@ class ScannerPage(ctk.CTkFrame):
 
         self.scanner: OptionScanner | None = None
 
+        self.market_data_adapter = (
+            MarketDataAdapter()
+        )
+
         self.create_header()
 
         self.create_workspace()
@@ -165,7 +175,7 @@ class ScannerPage(ctk.CTkFrame):
         self.subtitle = ctk.CTkLabel(
             self.header,
             text=(
-                "扫描期权链并按照成交量筛选活跃合约"
+                "载入期权链并按照成交量筛选活跃合约"
             ),
             text_color=COLOR_TEXT_SECONDARY,
             font=(
@@ -578,6 +588,7 @@ class ScannerPage(ctk.CTkFrame):
         ]
 
         if direction == "CALL":
+
             filtered = [
                 contract
                 for contract in filtered
@@ -586,6 +597,7 @@ class ScannerPage(ctk.CTkFrame):
             ]
 
         elif direction == "PUT":
+
             filtered = [
                 contract
                 for contract in filtered
@@ -610,9 +622,9 @@ class ScannerPage(ctk.CTkFrame):
         Execute scanner against supplied contracts.
 
         This method intentionally accepts market data
-        from outside the UI so that future Excel /
-        TDX / DDE readers can connect without changing
-        the scanner page interface.
+        from outside the UI so that Excel / TDX / DDE
+        readers can connect without changing the
+        scanner page interface.
         """
 
         filtered = self.filter_contracts(
@@ -629,9 +641,11 @@ class ScannerPage(ctk.CTkFrame):
         self.scanner = scanner
 
         if direction == "CALL":
+
             return scanner.top_calls()
 
         if direction == "PUT":
+
             return scanner.top_puts()
 
         return scanner.selected()
@@ -703,17 +717,27 @@ class ScannerPage(ctk.CTkFrame):
 
         if not contracts:
 
-            self.summary_label.configure(
-                text="没有符合条件的期权合约。"
-            )
+            if hasattr(
+                self,
+                "summary_label",
+            ):
+
+                self.summary_label.configure(
+                    text="没有符合条件的期权合约。"
+                )
 
             return
 
-        self.summary_label.configure(
-            text=(
-                f"共找到 {len(contracts)} 个合约"
+        if hasattr(
+            self,
+            "summary_label",
+        ):
+
+            self.summary_label.configure(
+                text=(
+                    f"共找到 {len(contracts)} 个合约"
+                )
             )
-        )
 
         for column, key in enumerate(
             self.RESULT_COLUMNS
@@ -799,11 +823,27 @@ class ScannerPage(ctk.CTkFrame):
     # ======================================================
 
     def clear_result_widgets(self) -> None:
-        """Remove current result table widgets."""
+        """
+        Remove current result table widgets.
+
+        This method intentionally supports objects
+        constructed through object.__new__ during
+        unit testing, where normal Tkinter initialization
+        has not occurred yet.
+        """
+
+        if not hasattr(
+            self,
+            "result_labels",
+        ):
+            return
 
         for widget in self.result_labels:
 
-            widget.destroy()
+            try:
+                widget.destroy()
+            except Exception:
+                pass
 
         self.result_labels.clear()
 
@@ -816,25 +856,82 @@ class ScannerPage(ctk.CTkFrame):
 
         self.clear_result_widgets()
 
-        self.summary_label.configure(
-            text="暂无扫描结果"
-        )
+        if hasattr(
+            self,
+            "summary_label",
+        ):
 
-        self.status_label.configure(
-            text="等待扫描",
-            text_color=COLOR_TEXT_SECONDARY,
-        )
+            self.summary_label.configure(
+                text="暂无扫描结果"
+            )
+
+        if hasattr(
+            self,
+            "status_label",
+        ):
+
+            self.status_label.configure(
+                text="等待扫描",
+                text_color=COLOR_TEXT_SECONDARY,
+            )
 
     # ======================================================
-    # Market Data Injection
+    # Market Data Adapter
     # ======================================================
+
+    def load_market_data(
+        self,
+        records,
+    ) -> list[OptionContract]:
+        """
+        Load raw market data through MarketDataAdapter.
+
+        Parameters
+        ----------
+        records:
+            Raw market-data records.
+
+        Returns
+        -------
+        list[OptionContract]
+            A copy of the normalized contracts.
+
+        Notes
+        -----
+        The adapter is intentionally kept outside the
+        scanner model so that different market-data
+        sources can be connected later.
+        """
+
+        if not hasattr(
+            self,
+            "market_data_adapter",
+        ):
+
+            self.market_data_adapter = (
+                MarketDataAdapter()
+            )
+
+        contracts = (
+            self.market_data_adapter.normalize_records(
+                records
+            )
+        )
+
+        self.set_contracts(
+            contracts
+        )
+
+        return list(
+            self.contracts
+        )
 
     def set_contracts(
         self,
         contracts: list[OptionContract],
     ) -> None:
         """
-        Inject option chain market data.
+        Inject normalized option chain market data.
 
         Future Excel / TDX / DDE readers can call
         this method directly.
@@ -850,17 +947,74 @@ class ScannerPage(ctk.CTkFrame):
 
         self.clear_result_widgets()
 
-        self.summary_label.configure(
-            text=(
-                f"已载入 {len(self.contracts)} 个合约，"
-                "等待扫描。"
+        if hasattr(
+            self,
+            "summary_label",
+        ):
+
+            self.summary_label.configure(
+                text=(
+                    f"已载入 {len(self.contracts)} 个合约，"
+                    "等待扫描。"
+                )
             )
+
+        if hasattr(
+            self,
+            "status_label",
+        ):
+
+            self.status_label.configure(
+                text="市场数据已载入。",
+                text_color=COLOR_SUCCESS,
+            )
+
+    # ======================================================
+    # Market Data Snapshot
+    # ======================================================
+
+    def get_market_data(
+        self,
+    ) -> list[OptionContract]:
+        """
+        Return a copy of currently loaded contracts.
+        """
+
+        return list(
+            self.contracts
         )
 
-        self.status_label.configure(
-            text="市场数据已载入。",
-            text_color=COLOR_SUCCESS,
-        )
+    def clear_market_data(self) -> None:
+        """
+        Clear currently loaded market data.
+        """
+
+        self.contracts = []
+
+        self.selected_contracts = []
+
+        self.scanner = None
+
+        self.clear_result_widgets()
+
+        if hasattr(
+            self,
+            "summary_label",
+        ):
+
+            self.summary_label.configure(
+                text="暂无市场数据"
+            )
+
+        if hasattr(
+            self,
+            "status_label",
+        ):
+
+            self.status_label.configure(
+                text="市场数据已清空。",
+                text_color=COLOR_TEXT_SECONDARY,
+            )
 
     # ======================================================
     # Summary
