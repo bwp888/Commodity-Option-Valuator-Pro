@@ -72,11 +72,13 @@ class PipelineParameters:
         Annualized risk-free interest rate.
 
     option:
-        Optional option contract associated with the
-        valuation request.
+        Optional single option contract associated with
+        the parameters.
 
-        The field is optional to preserve compatibility
-        with the original Commit 0010 pipeline interface.
+        This field is primarily used by
+        MarketValuationWorkflow for single-contract
+        valuation. It is optional so that the original
+        batch pipeline API remains backward compatible.
     """
 
     underlying_price: float
@@ -159,9 +161,7 @@ class PipelineResult:
             self.valuations
         )
 
-    def to_dict(
-        self,
-    ) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert pipeline result to dictionary.
         """
@@ -174,9 +174,7 @@ class PipelineResult:
                     "symbol": item.symbol,
                     "direction": item.direction.value,
                     "premium": item.premium,
-                    "theoretical_price": (
-                        item.theoretical_price
-                    ),
+                    "theoretical_price": item.theoretical_price,
                     "delta": item.delta,
                     "gamma": item.gamma,
                     "theta": item.theta,
@@ -288,6 +286,24 @@ class OptionPipeline:
     ) -> list[OptionContract]:
         """
         Load option market data from Excel.
+
+        Parameters
+        ----------
+        file_path:
+            Path to the market data file.
+
+        Returns
+        -------
+        list[OptionContract]
+            Normalized option contracts.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist.
+
+        ValueError
+            If the reader returns invalid data.
         """
 
         path = Path(
@@ -337,6 +353,14 @@ class OptionPipeline:
     ) -> None:
         """
         Set already-normalized option contracts.
+
+        This method is useful when market data has
+        already been loaded by another reader.
+
+        Parameters
+        ----------
+        contracts:
+            Normalized option contract list.
         """
 
         self.contracts = list(
@@ -351,9 +375,7 @@ class OptionPipeline:
     # Clear
     # ======================================================
 
-    def clear(
-        self,
-    ) -> None:
+    def clear(self) -> None:
         """
         Clear loaded market data and valuation results.
         """
@@ -388,6 +410,22 @@ class OptionPipeline:
     ) -> list[ValuationResult]:
         """
         Evaluate all loaded option contracts.
+
+        Parameters
+        ----------
+        parameters:
+            Valuation parameters.
+
+        Returns
+        -------
+        list[ValuationResult]
+            Valuation results.
+
+        Raises
+        ------
+        ValueError
+            If no market data has been loaded or
+            parameters are invalid.
         """
 
         self.validate_parameters(
@@ -426,6 +464,20 @@ class OptionPipeline:
 
         The contract does not need to be part of the
         currently loaded pipeline data.
+
+        Returns
+        -------
+        ValuationResult
+            Direct valuation result for the supplied
+            option contract.
+
+        Notes
+        -----
+        This method intentionally returns ValuationResult
+        rather than PipelineResult.
+
+        This preserves the original single-contract API
+        used by MarketValuationWorkflow.
         """
 
         self.validate_parameters(
@@ -504,7 +556,7 @@ class OptionPipeline:
 
     # ======================================================
     # Result Export
-    # ======================================================
+    # ==========================================================
 
     def results_to_dict(
         self,
@@ -551,7 +603,6 @@ class OptionPipeline:
 # ==========================================================
 # Public Exports
 # ==========================================================
-
 
 __all__ = [
     "PipelineParameters",
