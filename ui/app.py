@@ -4,38 +4,40 @@ Commodity Option Valuator Pro
 
 Application UI Container.
 
-Commit 0008
+Commit 0009
 ------------
 
 Author : Simon
-Version : 0.2.0
+Version : 0.2.1
 """
 
 from __future__ import annotations
 
 import customtkinter as ctk
 
-from ui.sidebar import (
-    Sidebar,
+from ui.components import (
+    PlaceholderPage,
+    StatusIndicator,
 )
 
 from ui.dashboard import (
     DashboardPage,
 )
 
-from ui.components import (
-    PlaceholderPage,
-    StatusIndicator,
+from ui.sidebar import (
+    Sidebar,
 )
 
 from ui.styles import (
     COLOR_BACKGROUND,
     COLOR_TEXT,
-    COLOR_TEXT_SECONDARY,
-    HEADER_HEIGHT,
-    FONT_FAMILY,
-    FONT_BODY_SIZE,
     CONTENT_PADDING,
+    FONT_FAMILY,
+    HEADER_HEIGHT,
+)
+
+from ui.valuation import (
+    ValuationPage,
 )
 
 
@@ -43,10 +45,9 @@ from ui.styles import (
 # Page Metadata
 # ==========================================================
 
-
 PAGE_TITLES: dict[str, str] = {
     "dashboard": "首页",
-    "valuation": "单合约估值",
+    "valuation": "期权估值",
     "scanner": "期权扫描",
     "risk": "风险分析",
     "market": "行情数据",
@@ -58,7 +59,6 @@ PAGE_TITLES: dict[str, str] = {
 # ==========================================================
 # Application Frame
 # ==========================================================
-
 
 class ApplicationFrame(ctk.CTkFrame):
     """
@@ -86,9 +86,7 @@ class ApplicationFrame(ctk.CTkFrame):
             **kwargs,
         )
 
-        self.current_page = (
-            "dashboard"
-        )
+        self.current_page = "dashboard"
 
         self.page_widgets: dict[
             str,
@@ -120,9 +118,7 @@ class ApplicationFrame(ctk.CTkFrame):
     # ======================================================
 
     def create_sidebar(self) -> None:
-        """
-        Create application sidebar.
-        """
+        """Create application sidebar."""
 
         self.sidebar = Sidebar(
             self,
@@ -136,14 +132,16 @@ class ApplicationFrame(ctk.CTkFrame):
             sticky="nsew",
         )
 
+        self.sidebar.set_active(
+            "dashboard"
+        )
+
     # ======================================================
     # Header
     # ======================================================
 
     def create_header(self) -> None:
-        """
-        Create top application header.
-        """
+        """Create application header."""
 
         self.header = ctk.CTkFrame(
             self,
@@ -169,7 +167,9 @@ class ApplicationFrame(ctk.CTkFrame):
 
         self.page_title = ctk.CTkLabel(
             self.header,
-            text="首页",
+            text=PAGE_TITLES[
+                "dashboard"
+            ],
             text_color=COLOR_TEXT,
             font=(
                 FONT_FAMILY,
@@ -186,12 +186,10 @@ class ApplicationFrame(ctk.CTkFrame):
             sticky="w",
         )
 
-        self.status_indicator = (
-            StatusIndicator(
-                self.header,
-                text="系统就绪",
-                status="ready",
-            )
+        self.status_indicator = StatusIndicator(
+            self.header,
+            text="系统就绪",
+            status="ready",
         )
 
         self.status_indicator.grid(
@@ -205,9 +203,7 @@ class ApplicationFrame(ctk.CTkFrame):
     # ======================================================
 
     def create_content(self) -> None:
-        """
-        Create main page content container.
-        """
+        """Create main content container."""
 
         self.content = ctk.CTkFrame(
             self,
@@ -249,24 +245,30 @@ class ApplicationFrame(ctk.CTkFrame):
                 self.content
             )
 
-        placeholder_text = {
-            "valuation": (
-                "单合约估值页面"
-            ),
+        if page_id == "valuation":
+
+            return ValuationPage(
+                self.content
+            )
+
+        descriptions: dict[
+            str,
+            str,
+        ] = {
             "scanner": (
-                "期权扫描页面"
+                "期权链自动扫描功能将在后续版本接入。"
             ),
             "risk": (
-                "风险分析页面"
+                "风险评分和风险等级分析功能将在后续版本接入。"
             ),
             "market": (
-                "行情数据页面"
+                "文华财经、通达信等市场数据将在后续版本接入。"
             ),
             "charts": (
-                "图表分析页面"
+                "收益曲线、Greeks 曲线和风险图表将在后续版本接入。"
             ),
             "reports": (
-                "报告中心页面"
+                "估值报告和风险分析报告将在后续版本接入。"
             ),
         }
 
@@ -274,11 +276,11 @@ class ApplicationFrame(ctk.CTkFrame):
             self.content,
             title=PAGE_TITLES.get(
                 page_id,
-                "页面",
-            ),
-            description=placeholder_text.get(
-                page_id,
                 "功能页面",
+            ),
+            description=descriptions.get(
+                page_id,
+                "功能正在建设中。",
             ),
         )
 
@@ -291,7 +293,7 @@ class ApplicationFrame(ctk.CTkFrame):
         page_id: str,
     ) -> None:
         """
-        Display requested page.
+        Display the requested page.
         """
 
         if page_id not in PAGE_TITLES:
@@ -329,6 +331,10 @@ class ApplicationFrame(ctk.CTkFrame):
             ]
         )
 
+        self.sidebar.set_active(
+            page_id
+        )
+
         self.status_indicator.set_status(
             "ready",
             "系统就绪",
@@ -343,9 +349,7 @@ class ApplicationFrame(ctk.CTkFrame):
         status: str,
         text: str,
     ) -> None:
-        """
-        Update application status.
-        """
+        """Update application status."""
 
         self.status_indicator.set_status(
             status,
