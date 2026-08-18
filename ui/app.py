@@ -4,11 +4,13 @@ Commodity Option Valuator Pro
 
 Application UI Container.
 
-Commit 0009
+Commit 0011
 ------------
 
+Connect option scanner workspace.
+
 Author : Simon
-Version : 0.2.1
+Version : 0.3.0
 """
 
 from __future__ import annotations
@@ -24,6 +26,10 @@ from ui.dashboard import (
     DashboardPage,
 )
 
+from ui.scanner import (
+    ScannerPage,
+)
+
 from ui.sidebar import (
     Sidebar,
 )
@@ -36,14 +42,11 @@ from ui.styles import (
     HEADER_HEIGHT,
 )
 
-from ui.valuation import (
-    ValuationPage,
-)
-
 
 # ==========================================================
 # Page Metadata
 # ==========================================================
+
 
 PAGE_TITLES: dict[str, str] = {
     "dashboard": "首页",
@@ -59,6 +62,7 @@ PAGE_TITLES: dict[str, str] = {
 # ==========================================================
 # Application Frame
 # ==========================================================
+
 
 class ApplicationFrame(ctk.CTkFrame):
     """
@@ -245,9 +249,9 @@ class ApplicationFrame(ctk.CTkFrame):
                 self.content
             )
 
-        if page_id == "valuation":
+        if page_id == "scanner":
 
-            return ValuationPage(
+            return ScannerPage(
                 self.content
             )
 
@@ -255,8 +259,9 @@ class ApplicationFrame(ctk.CTkFrame):
             str,
             str,
         ] = {
-            "scanner": (
-                "期权链自动扫描功能将在后续版本接入。"
+            "valuation": (
+                "Black-Scholes 估值、Greeks "
+                "和二阶 Taylor 估值功能已接入。"
             ),
             "risk": (
                 "风险评分和风险等级分析功能将在后续版本接入。"
@@ -360,6 +365,7 @@ class ApplicationFrame(ctk.CTkFrame):
 # ==========================================================
 # Public Exports
 # ==========================================================
+
 
 __all__ = [
     "PAGE_TITLES",
