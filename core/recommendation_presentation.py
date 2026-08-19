@@ -27,7 +27,7 @@ Recommendation Workflow
 Recommendation Presentation
 
 Author : Simon
-Version : 0.6.2
+Version : 0.6.3
 Python : 3.12
 """
 
@@ -36,15 +36,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from core.opportunity_analyzer import (
-    OpportunityAnalysisResult,
-)
-
 from core.recommendation_engine import (
     Recommendation,
     RecommendationAction,
     RecommendationLevel,
     RecommendationResult,
+)
+
+from core.recommendation_summary import (
+    RecommendationSummary,
 )
 
 from core.recommendation_workflow import (
@@ -151,40 +151,6 @@ class RecommendationPresentation:
     reason: str
 
     risk_warning: str | None
-
-
-# ==========================================================
-# Recommendation Summary
-# ==========================================================
-
-
-@dataclass(frozen=True)
-class RecommendationSummary:
-    """
-    Aggregate recommendation statistics.
-    """
-
-    total_count: int
-
-    buy_count: int
-
-    sell_count: int
-
-    watch_count: int
-
-    reject_count: int
-
-    level_a_count: int
-
-    level_b_count: int
-
-    level_c_count: int
-
-    level_d_count: int
-
-    highest_score: float | None
-
-    lowest_risk_score: float | None
 
 
 # ==========================================================
@@ -548,6 +514,11 @@ class RecommendationPresenter:
     ) -> RecommendationSummary:
         """
         Build aggregate recommendation statistics.
+
+        This method delegates summary construction to the
+        canonical RecommendationSummaryBuilder so that the
+        presentation and report layers share one stable
+        summary contract.
         """
 
         if not isinstance(
@@ -558,84 +529,12 @@ class RecommendationPresenter:
                 "result must be a RecommendationResult"
             )
 
-        recommendations = result.recommendations
-
-        buy_count = sum(
-            item.action == RecommendationAction.BUY
-            for item in recommendations
+        from core.recommendation_summary import (
+            RecommendationSummaryBuilder,
         )
 
-        sell_count = sum(
-            item.action == RecommendationAction.SELL
-            for item in recommendations
-        )
-
-        watch_count = sum(
-            item.action == RecommendationAction.WATCH
-            for item in recommendations
-        )
-
-        reject_count = sum(
-            item.action == RecommendationAction.REJECT
-            for item in recommendations
-        )
-
-        level_a_count = sum(
-            item.level == RecommendationLevel.A
-            for item in recommendations
-        )
-
-        level_b_count = sum(
-            item.level == RecommendationLevel.B
-            for item in recommendations
-        )
-
-        level_c_count = sum(
-            item.level == RecommendationLevel.C
-            for item in recommendations
-        )
-
-        level_d_count = sum(
-            item.level == RecommendationLevel.D
-            for item in recommendations
-        )
-
-        scores = tuple(
-            float(
-                item.score
-            )
-            for item in recommendations
-        )
-
-        risks = tuple(
-            float(
-                item.risk_score
-            )
-            for item in recommendations
-        )
-
-        return RecommendationSummary(
-            total_count=len(
-                recommendations
-            ),
-            buy_count=buy_count,
-            sell_count=sell_count,
-            watch_count=watch_count,
-            reject_count=reject_count,
-            level_a_count=level_a_count,
-            level_b_count=level_b_count,
-            level_c_count=level_c_count,
-            level_d_count=level_d_count,
-            highest_score=(
-                max(scores)
-                if scores
-                else None
-            ),
-            lowest_risk_score=(
-                min(risks)
-                if risks
-                else None
-            ),
+        return RecommendationSummaryBuilder.from_result(
+            result
         )
 
     # ======================================================

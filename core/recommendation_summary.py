@@ -29,7 +29,7 @@ The summary layer is intentionally read-only. It does not change
 recommendation rules or recommendation ordering.
 
 Author : Simon
-Version : 0.6.2
+Version : 0.6.3
 Python : 3.12
 """
 
@@ -88,6 +88,12 @@ class RecommendationSummary:
     level_d_count:
         Number of D-level recommendations.
 
+    highest_score:
+        Highest recommendation score, if available.
+
+    lowest_risk_score:
+        Lowest recommendation risk score, if available.
+
     top:
         Highest-priority recommendation, if available.
     """
@@ -109,6 +115,10 @@ class RecommendationSummary:
     level_c_count: int
 
     level_d_count: int
+
+    highest_score: float | None
+
+    lowest_risk_score: float | None
 
     top: Recommendation | None
 
@@ -267,6 +277,11 @@ class RecommendationSummaryBuilder:
             elif recommendation.action == RecommendationAction.REJECT:
                 reject_count += 1
 
+            else:
+                raise ValueError(
+                    "recommendation has invalid action"
+                )
+
             if recommendation.level == RecommendationLevel.A:
                 level_a_count += 1
 
@@ -292,6 +307,20 @@ class RecommendationSummaryBuilder:
                 "does not match recommendations length"
             )
 
+        scores = tuple(
+            float(
+                recommendation.score
+            )
+            for recommendation in result.recommendations
+        )
+
+        risk_scores = tuple(
+            float(
+                recommendation.risk_score
+            )
+            for recommendation in result.recommendations
+        )
+
         return RecommendationSummary(
             total_count=result.total_count,
             buy_count=buy_count,
@@ -302,6 +331,16 @@ class RecommendationSummaryBuilder:
             level_b_count=level_b_count,
             level_c_count=level_c_count,
             level_d_count=level_d_count,
+            highest_score=(
+                max(scores)
+                if scores
+                else None
+            ),
+            lowest_risk_score=(
+                min(risk_scores)
+                if risk_scores
+                else None
+            ),
             top=result.top,
         )
 
