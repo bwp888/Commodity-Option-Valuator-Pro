@@ -1,12 +1,16 @@
 """
 Commodity Option Valuator Pro
------------------------------
+=============================
 
 Application Entry Point
 
+Commit 0008
+------------
+Build modular CustomTkinter application GUI framework.
+
 Author : Simon
-Version : 0.1.0
-Python  : 3.12
+Version : 0.2.0
+Python : 3.12
 """
 
 from __future__ import annotations
@@ -24,6 +28,9 @@ from config.settings import (
 
 from core.logger import get_logger
 
+from ui.app import ApplicationFrame
+from ui.styles import initialize_theme
+
 
 # ==========================================================
 # Logger
@@ -32,36 +39,66 @@ from core.logger import get_logger
 logger = get_logger()
 
 
+# ==========================================================
+# Main Application
+# ==========================================================
+
+
 class CommodityOptionValuatorApp(ctk.CTk):
     """
-    Main Application Window.
+    Main application window.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
-        logger.info("Initializing application...")
+        logger.info(
+            "Initializing application..."
+        )
 
         self.initialize_window()
 
-        logger.info("Application initialized successfully.")
+        self.application_frame = (
+            ApplicationFrame(
+                self
+            )
+        )
 
+        self.application_frame.pack(
+            fill="both",
+            expand=True,
+        )
+
+        logger.info(
+            "Application initialized successfully."
+        )
+
+    # ------------------------------------------------------
+    # Window Initialization
     # ------------------------------------------------------
 
     def initialize_window(self) -> None:
         """
-        Initialize main window.
+        Initialize main application window.
         """
 
-        self.title(f"{APP_NAME}  v{APP_VERSION}")
+        self.title(
+            f"{APP_NAME}  v{APP_VERSION}"
+        )
 
-        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        self.geometry(
+            f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}"
+        )
 
-        self.minsize(1200, 800)
+        self.minsize(
+            1200,
+            800,
+        )
 
-        # Window centered
         self.center_window()
 
+    # ------------------------------------------------------
+    # Center Window
     # ------------------------------------------------------
 
     def center_window(self) -> None:
@@ -74,22 +111,46 @@ class CommodityOptionValuatorApp(ctk.CTk):
         width = self.winfo_width()
         height = self.winfo_height()
 
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
+        if width <= 1:
+            width = WINDOW_WIDTH
 
-        x = int((screen_width - width) / 2)
-        y = int((screen_height - height) / 2)
+        if height <= 1:
+            height = WINDOW_HEIGHT
 
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        screen_width = (
+            self.winfo_screenwidth()
+        )
 
+        screen_height = (
+            self.winfo_screenheight()
+        )
+
+        x = int(
+            (screen_width - width)
+            / 2
+        )
+
+        y = int(
+            (screen_height - height)
+            / 2
+        )
+
+        self.geometry(
+            f"{width}x{height}+{x}+{y}"
+        )
+
+    # ------------------------------------------------------
+    # Run
     # ------------------------------------------------------
 
     def run(self) -> None:
         """
-        Start application.
+        Start application event loop.
         """
 
-        logger.info("Application started.")
+        logger.info(
+            "Application started."
+        )
 
         self.mainloop()
 
@@ -98,24 +159,29 @@ class CommodityOptionValuatorApp(ctk.CTk):
 # Main
 # ==========================================================
 
+
 def main() -> None:
     """
-    Application entry.
+    Application entry point.
     """
 
     logger.info("=" * 60)
     logger.info(APP_NAME)
-    logger.info(f"Version : {APP_VERSION}")
+    logger.info(
+        f"Version : {APP_VERSION}"
+    )
     logger.info("=" * 60)
 
-    ctk.set_appearance_mode(THEME)
-
-    ctk.set_default_color_theme(COLOR_THEME)
+    initialize_theme()
 
     app = CommodityOptionValuatorApp()
 
     app.run()
 
+
+# ==========================================================
+# Script Entry
+# ==========================================================
 
 if __name__ == "__main__":
     main()

@@ -4,19 +4,52 @@ Commodity Option Valuator Pro
 
 Application UI Container.
 
-Commit 0012
-------------
+Commit 0024
+-----------
 
-Connect option scanner workspace with
-the unified market-data adapter boundary.
+Integrates the RecommendationPanel into the main
+CustomTkinter application container.
+
+Architecture
+------------
+Recommendation Engine
+    ↓
+Recommendation Workflow
+    ↓
+Recommendation Presentation
+    ↓
+Recommendation Summary
+    ↓
+Recommendation Report
+    ↓
+Recommendation Report Presentation
+    ↓
+Recommendation Panel
+    ↓
+ApplicationFrame
+
+The ApplicationFrame is responsible only for:
+    - page creation,
+    - page navigation,
+    - UI lifecycle,
+    - application status,
+    - market-data injection,
+    - recommendation-presentation injection.
+
+Business logic remains outside the UI container.
 
 Author : Simon
-Version : 0.3.1
+Version : 0.6.4
+Python : 3.12
 """
 
 from __future__ import annotations
 
 import customtkinter as ctk
+
+from core.recommendation_report_presentation import (
+    RecommendationReportPresentation,
+)
 
 from models.option_scanner import (
     OptionContract,
@@ -29,6 +62,10 @@ from ui.components import (
 
 from ui.dashboard import (
     DashboardPage,
+)
+
+from ui.recommendation_panel import (
+    RecommendationPanel,
 )
 
 from ui.scanner import (
@@ -60,7 +97,7 @@ PAGE_TITLES: dict[str, str] = {
     "risk": "风险分析",
     "market": "行情数据",
     "charts": "图表分析",
-    "reports": "报告中心",
+    "reports": "推荐报告",
 }
 
 
@@ -81,6 +118,9 @@ class ApplicationFrame(ctk.CTkFrame):
     - Page lifecycle
     - Application status
     - Market-data injection
+    - Recommendation-report presentation injection
+
+    The ApplicationFrame does not perform business calculations.
     """
 
     def __init__(
@@ -247,6 +287,9 @@ class ApplicationFrame(ctk.CTkFrame):
     ) -> ctk.CTkFrame:
         """
         Create a page from its identifier.
+
+        The reports page is now backed by the stable
+        RecommendationPanel.
         """
 
         if page_id == "dashboard":
@@ -261,25 +304,28 @@ class ApplicationFrame(ctk.CTkFrame):
                 self.content
             )
 
+        if page_id == "reports":
+
+            return RecommendationPanel(
+                self.content
+            )
+
         descriptions: dict[
             str,
             str,
         ] = {
             "valuation": (
                 "Black-Scholes 估值、Greeks "
-                "和二阶 Taylor 估值功能已接入。"
+                "和二阶 Taylor 估值功能将在后续版本继续接入。"
             ),
             "risk": (
-                "风险评分和风险等级分析功能将在后续版本接入。"
+                "风险评分和风险等级分析功能将在后续版本继续接入。"
             ),
             "market": (
-                "文华财经、通达信等市场数据将在后续版本接入。"
+                "文华财经、通达信等市场数据将在后续版本继续接入。"
             ),
             "charts": (
-                "收益曲线、Greeks 曲线和风险图表将在后续版本接入。"
-            ),
-            "reports": (
-                "估值报告和风险分析报告将在后续版本接入。"
+                "收益曲线、Greeks 曲线和风险图表将在后续版本继续接入。"
             ),
         }
 
@@ -305,6 +351,8 @@ class ApplicationFrame(ctk.CTkFrame):
     ) -> None:
         """
         Display the requested page.
+
+        Pages are created lazily and then reused.
         """
 
         if page_id not in PAGE_TITLES:
@@ -396,7 +444,7 @@ class ApplicationFrame(ctk.CTkFrame):
             ScannerPage,
         ):
             raise TypeError(
-                "scanner 页面类型错误。"
+                "scanner page type error"
             )
 
         scanner_page.set_contracts(
@@ -468,10 +516,114 @@ class ApplicationFrame(ctk.CTkFrame):
             ScannerPage,
         ):
             raise TypeError(
-                "scanner 页面类型错误。"
+                "scanner page type error"
             )
 
         return scanner_page
+
+    # ======================================================
+    # Recommendation Panel Access
+    # ======================================================
+
+    def get_recommendation_panel(
+        self,
+    ) -> RecommendationPanel:
+        """
+        Return the RecommendationPanel instance.
+
+        The reports page is created lazily.
+        """
+
+        if "reports" not in self.page_widgets:
+
+            self.page_widgets[
+                "reports"
+            ] = self.create_page(
+                "reports"
+            )
+
+        reports_page = self.page_widgets[
+            "reports"
+        ]
+
+        if not isinstance(
+            reports_page,
+            RecommendationPanel,
+        ):
+            raise TypeError(
+                "reports page type error"
+            )
+
+        return reports_page
+
+    # ======================================================
+    # Recommendation Presentation Injection
+    # ======================================================
+
+    def set_recommendation_presentation(
+        self,
+        presentation: RecommendationReportPresentation,
+    ) -> None:
+        """
+        Inject a RecommendationReportPresentation
+        into the recommendation panel.
+
+        The ApplicationFrame does not perform any
+        recommendation calculation.
+
+        It simply forwards the already calculated,
+        validated presentation model to the UI panel.
+        """
+
+        panel = self.get_recommendation_panel()
+
+        panel.set_presentation(
+            presentation
+        )
+
+        self.set_status(
+            "ready",
+            "推荐报告已更新",
+        )
+
+    # ======================================================
+    # Recommendation Presentation Access
+    # ======================================================
+
+    def get_recommendation_presentation(
+        self,
+    ) -> RecommendationReportPresentation | None:
+        """
+        Return the currently displayed recommendation
+        presentation.
+
+        Returns None when no recommendation report
+        has been injected.
+        """
+
+        panel = self.get_recommendation_panel()
+
+        return panel.presentation
+
+    # ======================================================
+    # Clear Recommendation Report
+    # ======================================================
+
+    def clear_recommendation_report(
+        self,
+    ) -> None:
+        """
+        Clear the currently displayed recommendation report.
+        """
+
+        panel = self.get_recommendation_panel()
+
+        panel.clear()
+
+        self.set_status(
+            "ready",
+            "推荐报告已清空",
+        )
 
     # ======================================================
     # Status

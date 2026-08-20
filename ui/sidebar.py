@@ -17,6 +17,10 @@ from collections.abc import Callable
 
 import customtkinter as ctk
 
+from config.settings import (
+    APP_VERSION,
+)
+
 from ui.styles import (
     COLOR_BACKGROUND,
     COLOR_PRIMARY,
@@ -49,6 +53,7 @@ NAVIGATION_ITEMS: list[tuple[str, str]] = [
 # ==========================================================
 # Sidebar
 # ==========================================================
+
 
 class Sidebar(ctk.CTkFrame):
     """
@@ -207,7 +212,7 @@ class Sidebar(ctk.CTkFrame):
 
         self.footer = ctk.CTkLabel(
             self,
-            text="v0.2.0 · Commit 0008",
+            text=f"v{APP_VERSION}",
             text_color=COLOR_TEXT_SECONDARY,
             font=(
                 FONT_FAMILY,
