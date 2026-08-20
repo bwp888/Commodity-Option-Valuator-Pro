@@ -4,22 +4,54 @@ Commodity Option Valuator Pro
 
 Option Valuation Workspace.
 
-Commit 0010
+Commit 0027
 ------------
 
-Connect the valuation UI with the core valuation engine.
+Connect the valuation UI with the SingleOptionValuator.
 
-Author : Simon
-Version : 0.2.2
+Architecture
+------------
+
+UI
+ ↓
+SingleOptionValuationInput
+ ↓
+SingleOptionValuator
+ ↓
+BlackScholes / Greeks / TaylorValuator
+
+Compatibility
+-------------
+
+The following legacy UI-facing methods are intentionally preserved:
+
+- parse_parameters()
+- build_contract()
+- evaluate_parameters()
+
+They exist only to preserve the established UI/test boundary.
+
+The UI valuation execution itself no longer uses ValuationEngine.
 """
 
 from __future__ import annotations
 
 import customtkinter as ctk
 
+from core.single_option_valuation import (
+    ReferenceVolatilityScenario,
+    SingleOptionValuationInput,
+    SingleOptionValuationResult,
+    SingleOptionValuator,
+)
+
 from core.valuation_engine import (
-    ValuationEngine,
     ValuationResult,
+)
+
+from models.option import (
+    OptionDirection as CoreOptionDirection,
+    OptionType,
 )
 
 from models.option_scanner import (
@@ -53,16 +85,28 @@ class ValuationPage(ctk.CTkFrame):
     """
     Option valuation workspace.
 
-    Commit 0010 connects the UI with the existing
-    ValuationEngine.
-
     Responsibilities
     ----------------
     - Collect valuation parameters.
     - Validate user input.
-    - Build OptionContract.
-    - Execute ValuationEngine.
-    - Display ValuationResult.
+    - Build SingleOptionValuationInput.
+    - Execute SingleOptionValuator.
+    - Display valuation result.
+
+    Compatibility
+    -------------
+    Existing UI tests still expect:
+
+        parse_parameters()
+        build_contract()
+        evaluate_parameters()
+
+    Those methods are preserved as compatibility boundaries.
+
+    Important
+    ---------
+    The actual valuation calculation is performed by
+    SingleOptionValuator.
     """
 
     RESULT_KEYS = (
@@ -108,13 +152,58 @@ class ValuationPage(ctk.CTkFrame):
             weight=1,
         )
 
-        self.engine = ValuationEngine()
+        # --------------------------------------------------
+        # New valuation service
+        # --------------------------------------------------
 
-        self.last_result: ValuationResult | None = None
+        self.valuator = SingleOptionValuator()
+
+        self.last_result: (
+            SingleOptionValuationResult | None
+        ) = None
 
         self.create_header()
 
         self.create_workspace()
+
+    # ======================================================
+    # Valuator Access
+    # ======================================================
+
+    def get_valuator(self) -> SingleOptionValuator:
+        """
+        Return the SingleOptionValuator used by this page.
+
+        Normally the valuator is created during __init__.
+
+        A lazy fallback is intentionally provided because
+        some established tests construct ValuationPage with:
+
+            ValuationPage.__new__(ValuationPage)
+
+        In that situation __init__ is not executed, so
+        self.valuator does not yet exist.
+
+        This method keeps that compatibility boundary while
+        ensuring the actual calculation still uses
+        SingleOptionValuator.
+        """
+
+        valuator = getattr(
+            self,
+            "valuator",
+            None,
+        )
+
+        if not isinstance(
+            valuator,
+            SingleOptionValuator,
+        ):
+            valuator = SingleOptionValuator()
+
+            self.valuator = valuator
+
+        return valuator
 
     # ======================================================
     # Header
@@ -319,7 +408,7 @@ class ValuationPage(ctk.CTkFrame):
 
         self.create_parameter_label(
             row=7,
-            text="期权方向",
+            text="期权类型",
         )
 
         self.direction_selector = ctk.CTkSegmentedButton(
@@ -541,29 +630,58 @@ class ValuationPage(ctk.CTkFrame):
     # Parameter Collection
     # ======================================================
 
-    def get_parameters(self) -> dict[str, str]:
+    def get_parameters(
+        self,
+    ) -> dict[str, str]:
         """
         Return current UI parameters.
 
-        Values are returned as raw strings.
-        Numeric conversion is performed by the
-        valuation execution layer.
+        Values remain raw strings.
+
+        Numeric conversion is performed by
+        parse_parameters().
         """
 
         return {
-            "symbol": self.symbol_entry.get().strip(),
-            "spot": self.spot_entry.get().strip(),
-            "strike": self.strike_entry.get().strip(),
+            "symbol": (
+                self.symbol_entry
+                .get()
+                .strip()
+            ),
+            "spot": (
+                self.spot_entry
+                .get()
+                .strip()
+            ),
+            "strike": (
+                self.strike_entry
+                .get()
+                .strip()
+            ),
             "market_price": (
-                self.market_price_entry.get().strip()
+                self.market_price_entry
+                .get()
+                .strip()
             ),
-            "days": self.days_entry.get().strip(),
+            "days": (
+                self.days_entry
+                .get()
+                .strip()
+            ),
             "volatility": (
-                self.volatility_entry.get().strip()
+                self.volatility_entry
+                .get()
+                .strip()
             ),
-            "rate": self.rate_entry.get().strip(),
+            "rate": (
+                self.rate_entry
+                .get()
+                .strip()
+            ),
             "direction": (
-                self.direction_selector.get()
+                self.direction_selector
+                .get()
+                .strip()
             ),
         }
 
@@ -578,10 +696,23 @@ class ValuationPage(ctk.CTkFrame):
         """
         Convert raw UI parameters into typed values.
 
-        Raises
-        ------
-        ValueError
-            If any parameter is invalid.
+        Compatibility
+        -------------
+
+        The established UI contract uses:
+
+            direction = CALL / PUT
+
+        They represent the option type in the current
+        single-option valuation UI.
+
+        SingleOptionValuator itself separates:
+
+            OptionType = CALL / PUT
+            OptionDirection = LONG / SHORT
+
+        The adapter is created later by
+        build_single_option_input().
         """
 
         symbol = parameters.get(
@@ -695,6 +826,12 @@ class ValuationPage(ctk.CTkFrame):
                     "无风险利率必须是有效数字。"
                 ) from exc
 
+        # --------------------------------------------------
+        # Validation order intentionally preserved.
+        #
+        # Existing tests depend on these validation results.
+        # --------------------------------------------------
+
         if spot <= 0:
             raise ValueError(
                 "标的价格必须大于 0。"
@@ -727,10 +864,8 @@ class ValuationPage(ctk.CTkFrame):
 
         return {
             "symbol": symbol,
-            "direction": (
-                OptionDirection(
-                    direction_value
-                )
+            "direction": OptionDirection(
+                direction_value
             ),
             "spot": spot,
             "strike": strike,
@@ -741,7 +876,7 @@ class ValuationPage(ctk.CTkFrame):
         }
 
     # ======================================================
-    # Contract Construction
+    # Legacy Contract Compatibility
     # ======================================================
 
     @staticmethod
@@ -749,10 +884,13 @@ class ValuationPage(ctk.CTkFrame):
         parameters: dict[str, object],
     ) -> OptionContract:
         """
-        Build OptionContract from typed parameters.
+        Build the legacy OptionContract.
 
-        The UI does not own market-data fields such as
-        volume and open interest yet, so they remain zero.
+        This method is retained for compatibility with the
+        existing UI/test boundary.
+
+        It is NOT used by the new SingleOptionValuator
+        execution path.
         """
 
         direction = parameters[
@@ -782,19 +920,142 @@ class ValuationPage(ctk.CTkFrame):
         )
 
     # ======================================================
-    # Engine Execution
+    # SingleOption Input Adapter
     # ======================================================
 
-    def evaluate_parameters(
+    @staticmethod
+    def build_single_option_input(
+        parameters: dict[str, object],
+    ) -> SingleOptionValuationInput:
+        """
+        Convert typed UI parameters into
+        SingleOptionValuationInput.
+
+        The current UI keeps the established CALL / PUT
+        selector.
+
+        Therefore:
+
+            CALL
+                ↓
+            OptionType.CALL
+
+            PUT
+                ↓
+            OptionType.PUT
+
+        Position direction remains LONG internally because
+        the current valuation page does not expose a separate
+        LONG / SHORT selector yet.
+        """
+
+        direction = parameters[
+            "direction"
+        ]
+
+        if not isinstance(
+            direction,
+            OptionDirection,
+        ):
+            raise ValueError(
+                "无效的期权方向。"
+            )
+
+        if direction == OptionDirection.CALL:
+
+            option_type = OptionType.CALL
+
+        elif direction == OptionDirection.PUT:
+
+            option_type = OptionType.PUT
+
+        else:
+
+            raise ValueError(
+                "期权类型必须为 CALL 或 PUT。"
+            )
+
+        current_volatility = float(
+            parameters["volatility"]
+        )
+
+        # --------------------------------------------------
+        # Current-state compatibility scenario
+        # --------------------------------------------------
+        #
+        # The present UI does not yet expose separate:
+        #
+        # - target futures price
+        # - target/reference volatility
+        #
+        # Therefore the current valuation is represented as
+        # a neutral scenario:
+        #
+        # target futures price
+        #     = current futures price
+        #
+        # target volatility
+        #     = current volatility
+        #
+        # This preserves the existing UI semantics while the
+        # new core architecture is already in place.
+        #
+
+        reference_volatility = (
+            ReferenceVolatilityScenario(
+                current=current_volatility,
+                target=current_volatility,
+            )
+        )
+
+        return SingleOptionValuationInput(
+            symbol=str(
+                parameters["symbol"]
+            ),
+            option_type=option_type,
+            current_futures_price=float(
+                parameters["spot"]
+            ),
+            strike=float(
+                parameters["strike"]
+            ),
+            current_option_price=float(
+                parameters["market_price"]
+            ),
+            current_option_iv=current_volatility,
+            remaining_days=int(
+                parameters["days"]
+            ),
+            target_futures_price=float(
+                parameters["spot"]
+            ),
+            reference_volatility=(
+                reference_volatility
+            ),
+            risk_free_rate=float(
+                parameters["rate"]
+            ),
+            direction=CoreOptionDirection.LONG,
+        )
+
+    # ======================================================
+    # Single Option Evaluation
+    # ======================================================
+
+    def evaluate_single_option(
         self,
         parameters: dict[str, str],
-    ) -> ValuationResult:
+    ) -> SingleOptionValuationResult:
         """
-        Execute valuation using current parameters.
+        Execute the new single-option valuation path.
 
-        This method is UI-independent apart from the
-        parameter dictionary and therefore provides a
-        stable boundary between UI and core valuation.
+        This is the actual calculation entry point.
+
+        ValuationEngine is intentionally not used here.
+
+        The valuator is obtained through get_valuator()
+        instead of directly accessing self.valuator so that
+        the established __new__()-based tests remain valid.
         """
 
         typed_parameters = (
@@ -803,30 +1064,136 @@ class ValuationPage(ctk.CTkFrame):
             )
         )
 
-        contract = self.build_contract(
-            typed_parameters
-        )
-
-        engine = ValuationEngine(
-            risk_free_rate=float(
-                typed_parameters["rate"]
+        inputs = (
+            self.build_single_option_input(
+                typed_parameters
             )
         )
 
-        result = engine.evaluate(
-            option=contract,
-            underlying_price=float(
-                typed_parameters["spot"]
+        valuator = self.get_valuator()
+
+        return valuator.evaluate(
+            inputs
+        )
+
+    # ======================================================
+    # Compatibility Result Adapter
+    # ======================================================
+
+    @staticmethod
+    def single_result_to_legacy_result(
+        result: SingleOptionValuationResult,
+        direction: OptionDirection,
+    ) -> ValuationResult:
+        """
+        Adapt SingleOptionValuationResult to the established
+        ValuationResult interface.
+
+        This adapter exists only for the current test/UI
+        compatibility boundary.
+
+        The calculation itself has already been performed by
+        SingleOptionValuator.
+        """
+
+        difference = (
+            result.current_theoretical_price
+            - result.current_option_price
+        )
+
+        risk_score = abs(
+            difference
+        )
+
+        return ValuationResult(
+            symbol=result.symbol,
+            direction=direction,
+            premium=float(
+                result.current_option_price
             ),
-            volatility=float(
-                typed_parameters["volatility"]
+            theoretical_price=float(
+                result.current_theoretical_price
             ),
-            days=int(
-                typed_parameters["days"]
+            delta=float(
+                result.current_delta
+            ),
+            gamma=float(
+                result.current_gamma
+            ),
+            theta=float(
+                result.current_theta
+            ),
+            vega=0.0,
+            difference=float(
+                difference
+            ),
+            risk_score=float(
+                risk_score
             ),
         )
 
-        return result
+    # ======================================================
+    # Compatibility Evaluation API
+    # ======================================================
+
+    def evaluate_parameters(
+        self,
+        parameters: dict[str, str],
+    ) -> ValuationResult:
+        """
+        Execute valuation through SingleOptionValuator.
+
+        Compatibility
+        -------------
+
+        The method still returns ValuationResult because
+        existing tests and older UI boundaries depend on it.
+
+        Internally:
+
+            parameters
+                ↓
+            SingleOptionValuationInput
+                ↓
+            SingleOptionValuator
+                ↓
+            SingleOptionValuationResult
+                ↓
+            compatibility adapter
+                ↓
+            ValuationResult
+        """
+
+        typed_parameters = (
+            self.parse_parameters(
+                parameters
+            )
+        )
+
+        single_result = (
+            self.evaluate_single_option(
+                parameters
+            )
+        )
+
+        direction = typed_parameters[
+            "direction"
+        ]
+
+        if not isinstance(
+            direction,
+            OptionDirection,
+        ):
+            raise ValueError(
+                "无效的期权方向。"
+            )
+
+        return (
+            self.single_result_to_legacy_result(
+                single_result,
+                direction,
+            )
+        )
 
     # ======================================================
     # Valuation Action
@@ -841,10 +1208,14 @@ class ValuationPage(ctk.CTkFrame):
 
         try:
 
-            parameters = self.get_parameters()
+            parameters = (
+                self.get_parameters()
+            )
 
-            result = self.evaluate_parameters(
-                parameters
+            result = (
+                self.evaluate_single_option(
+                    parameters
+                )
             )
 
         except ValueError as exc:
@@ -869,7 +1240,7 @@ class ValuationPage(ctk.CTkFrame):
 
         self.last_result = result
 
-        self.display_result(
+        self.display_single_result(
             result
         )
 
@@ -877,11 +1248,62 @@ class ValuationPage(ctk.CTkFrame):
     # Result Display
     # ======================================================
 
+    def display_single_result(
+        self,
+        result: SingleOptionValuationResult,
+    ) -> None:
+        """
+        Display SingleOptionValuationResult.
+        """
+
+        difference = (
+            result.current_theoretical_price
+            - result.current_option_price
+        )
+
+        values = {
+            "theoretical_price": (
+                f"{result.current_theoretical_price:.6f}"
+            ),
+            "delta": (
+                f"{result.current_delta:.6f}"
+            ),
+            "gamma": (
+                f"{result.current_gamma:.6f}"
+            ),
+            "theta": (
+                f"{result.current_theta:.6f}"
+            ),
+            "vega": "--",
+            "difference": (
+                f"{difference:.6f}"
+            ),
+            "risk_score": (
+                f"{abs(difference):.6f}"
+            ),
+        }
+
+        for key, value in values.items():
+
+            self.result_labels[
+                key
+            ].configure(
+                text=value
+            )
+
+    # ======================================================
+    # Legacy Result Display
+    # ======================================================
+
     def display_result(
         self,
         result: ValuationResult,
     ) -> None:
-        """Display a ValuationResult."""
+        """
+        Display legacy ValuationResult.
+
+        Retained for compatibility with existing callers.
+        """
 
         values = {
             "theoretical_price": (
@@ -947,7 +1369,9 @@ class ValuationPage(ctk.CTkFrame):
 
         self.last_result = None
 
-        for label in self.result_labels.values():
+        for label in (
+            self.result_labels.values()
+        ):
 
             label.configure(
                 text="--"

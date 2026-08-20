@@ -11,6 +11,12 @@ Provides the core calculation workflow for evaluating
 one selected commodity option under a target futures
 price and a reference-volatility scenario.
 
+Phase 2-A Extension
+-------------------
+
+The valuation result is additionally passed through the
+existing ComprehensiveEvaluator.
+
 Architecture
 ------------
 
@@ -33,6 +39,12 @@ Target Theoretical Option Price
 Target Greeks
     ↓
 Taylor Comparison
+    ↓
+SingleOptionValuationResult
+    ↓
+ComprehensiveEvaluator
+    ↓
+ComprehensiveEvaluationResult
 
 Important
 ---------
@@ -44,13 +56,19 @@ It deliberately reuses the existing:
 - BlackScholes
 - Greeks
 - TaylorValuator
+- ComprehensiveEvaluator
 
 It does not modify those existing models.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+from core.comprehensive_evaluation import (
+    ComprehensiveEvaluationResult,
+    ComprehensiveEvaluator,
+)
 
 from models.black_scholes import BlackScholes
 from models.greeks import Greeks
@@ -328,6 +346,13 @@ class SingleOptionValuationResult:
     - Target theoretical price
     - Target Greeks
     - Taylor comparison
+    - Comprehensive evaluation
+
+    ``comprehensive_evaluation`` is optional at the
+    dataclass level for backward compatibility.
+
+    ``SingleOptionValuator.evaluate()`` always populates
+    it for newly evaluated options.
     """
 
     symbol: str
@@ -358,6 +383,10 @@ class SingleOptionValuationResult:
 
     taylor_first_order_price: float
     taylor_second_order_price: float
+
+    comprehensive_evaluation: (
+        ComprehensiveEvaluationResult | None
+    ) = None
 
     @property
     def theoretical_price_change(self) -> float:
@@ -421,10 +450,12 @@ class SingleOptionValuationResult:
             * 100.0
         )
 
-    def to_dict(self) -> dict[str, float | str]:
+    def to_dict(
+        self,
+    ) -> dict[str, object]:
         """Return result as a dictionary."""
 
-        return {
+        result: dict[str, object] = {
             "symbol": self.symbol,
             "current_futures_price": (
                 self.current_futures_price
@@ -484,6 +515,13 @@ class SingleOptionValuationResult:
             ),
         }
 
+        if self.comprehensive_evaluation is not None:
+            result[
+                "comprehensive_evaluation"
+            ] = self.comprehensive_evaluation.to_dict()
+
+        return result
+
 
 # ==========================================================
 # Single Option Valuator
@@ -505,9 +543,39 @@ class SingleOptionValuator:
         Greeks
         ↓
         TaylorValuator
+        ↓
+        ComprehensiveEvaluator
     """
 
     DAYS_PER_YEAR = 365
+
+    def __init__(
+        self,
+        comprehensive_evaluator: ComprehensiveEvaluator | None = None,
+    ) -> None:
+        """
+        Initialize single-option valuator.
+
+        Parameters
+        ----------
+        comprehensive_evaluator:
+            Optional existing comprehensive evaluator.
+
+            If omitted, a default ComprehensiveEvaluator
+            is created.
+
+        Notes
+        -----
+        Dependency injection is used here so that tests
+        and future workflow layers can provide a controlled
+        evaluator without changing the valuation logic.
+        """
+
+        self.comprehensive_evaluator = (
+            comprehensive_evaluator
+            if comprehensive_evaluator is not None
+            else ComprehensiveEvaluator()
+        )
 
     def evaluate(
         self,
@@ -524,7 +592,8 @@ class SingleOptionValuator:
         Returns
         -------
         SingleOptionValuationResult
-            Complete current/target valuation result.
+            Complete current/target valuation result
+            including comprehensive evaluation.
         """
 
         inputs.validate()
@@ -619,10 +688,10 @@ class SingleOptionValuator:
         )
 
         # --------------------------------------------------
-        # Result
+        # Base Result
         # --------------------------------------------------
 
-        return SingleOptionValuationResult(
+        base_result = SingleOptionValuationResult(
             symbol=inputs.symbol,
             current_futures_price=(
                 inputs.current_futures_price
@@ -664,6 +733,27 @@ class SingleOptionValuator:
             ),
             taylor_second_order_price=(
                 taylor_second_order
+            ),
+        )
+
+        # --------------------------------------------------
+        # Comprehensive Evaluation
+        # --------------------------------------------------
+
+        comprehensive_evaluation = (
+            self.comprehensive_evaluator.evaluate(
+                base_result
+            )
+        )
+
+        # --------------------------------------------------
+        # Final Result
+        # --------------------------------------------------
+
+        return replace(
+            base_result,
+            comprehensive_evaluation=(
+                comprehensive_evaluation
             ),
         )
 
