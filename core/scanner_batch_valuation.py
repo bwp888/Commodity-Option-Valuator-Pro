@@ -4,11 +4,12 @@ Commodity Option Valuator Pro
 
 Batch Scanner Valuation Workflow.
 
-Commit 0027 - Phase 2
+Commit 0032 - Phase 2
 ---------------------
 
 Connects the scanner-selected option contracts with the
-existing SingleOptionValuator in batch mode.
+existing SingleOptionValuator in batch mode and validates
+underlying-level parameter coverage before valuation.
 
 Architecture
 ------------
@@ -18,6 +19,12 @@ OptionQuote
 ScannerValuationBridge
     ↓
 TOP N CALL / PUT per underlying
+    ↓
+ScannerCandidate
+    ↓
+ScannerBatchParameterResolver
+    ↓
+BatchValuationParameters
     ↓
 Batch Scanner Valuation
     ↓
@@ -29,7 +36,6 @@ SingleOptionValuationResult
 
 Important
 ---------
-
 This module does not modify:
 
 - OptionQuote
@@ -39,8 +45,16 @@ This module does not modify:
 - BlackScholes
 - Greeks
 - TaylorValuator
+- ComprehensiveEvaluator
 
 The batch layer only coordinates existing components.
+
+The ScannerBatchParameterResolver is responsible only for
+checking that all selected underlyings have complete
+underlying-level valuation parameters.
+
+It does not calculate market data, option prices, Greeks,
+implied volatility, or recommendations.
 """
 
 from __future__ import annotations
@@ -355,10 +369,11 @@ class ScannerBatchValuator:
     Responsibilities
     ----------------
     1. Select TOP N contracts per underlying and type.
-    2. Resolve batch valuation parameters.
-    3. Create SingleOptionValuationInput objects.
-    4. Reuse SingleOptionValuator.
-    5. Return structured batch results.
+    2. Validate parameter coverage for selected underlyings.
+    3. Resolve batch valuation parameters.
+    4. Create SingleOptionValuationInput objects.
+    5. Reuse SingleOptionValuator.
+    6. Return structured batch results.
 
     No pricing formula is implemented here.
     """
@@ -599,21 +614,53 @@ class ScannerBatchValuator:
 
         Flow
         ----
-
         OptionQuote
             ↓
         TOP N by underlying + CALL / PUT
+            ↓
+        ScannerCandidate
+            ↓
+        ScannerBatchParameterResolver
+            ↓
+        BatchValuationParameters
             ↓
         SingleOptionValuationInput
             ↓
         SingleOptionValuator
             ↓
         BatchValuationResult
+
+        The parameter resolver is intentionally applied after
+        scanner selection so that only underlyings represented
+        by the actual valuation candidates are required.
+
+        This prevents unrelated option-chain data from forcing
+        unnecessary parameter coverage.
         """
 
         candidates = self.select_candidates(
             quotes,
             top_n=top_n,
+        )
+
+        # Import locally to avoid the circular dependency:
+        #
+        # scanner_batch_valuation
+        #     ↓
+        # scanner_batch_parameter_resolver
+        #     ↓
+        # BatchValuationParameters
+        #
+        # The resolver depends on the public parameter contract
+        # defined in this module, so it must not be imported at
+        # module initialization time.
+        from core.scanner_batch_parameter_resolver import (
+            ScannerBatchParameterResolver,
+        )
+
+        ScannerBatchParameterResolver.validate_candidates_complete(
+            candidates,
+            parameters,
         )
 
         return self.evaluate_candidates(
