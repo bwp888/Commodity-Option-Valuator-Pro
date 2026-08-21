@@ -4,14 +4,14 @@ Commodity Option Valuator Pro
 
 Option Scanner Workspace.
 
-Commit 0013
-------------
+Commit 0029-B
+--------------
 
 Connect the option scanner workspace with
 the market data adapter.
 
 Author : Simon
-Version : 0.3.2
+Version : 0.3.3
 """
 
 from __future__ import annotations
@@ -23,7 +23,12 @@ from data.market_data_adapter import (
 )
 
 from core.scanner_batch_valuation import (
+    BatchValuationParameters,
     BatchValuationResult,
+    ScannerBatchValuator,
+)
+from data.option_chain import (
+    OptionQuote,
 )
 
 from models.option_scanner import (
@@ -825,6 +830,94 @@ class ScannerPage(ctk.CTkFrame):
                 self.result_labels.append(
                     label
                 )
+
+    # ======================================================
+    # Batch Valuation Execution
+    # ======================================================
+
+    def evaluate_quotes(
+        self,
+        quotes: list[OptionQuote] | tuple[OptionQuote, ...],
+        *,
+        top_n: int,
+        parameters: BatchValuationParameters,
+        valuator: ScannerBatchValuator | None = None,
+    ) -> BatchValuationResult:
+        """
+        Execute the existing scanner batch valuation workflow.
+
+        This method is the execution boundary for the Scanner UI.
+        It deliberately accepts normalized ``OptionQuote`` objects
+        because ``ScannerBatchValuator`` already defines the
+        OptionQuote -> ScannerCandidate -> valuation pipeline.
+
+        No pricing, Greeks, IV, Taylor, risk, or recommendation
+        calculation is implemented here.
+
+        The resulting ``BatchValuationResult`` is stored on the page
+        and passed to the existing presentation boundary.
+        """
+
+        if not isinstance(
+            quotes,
+            (list, tuple),
+        ):
+            raise TypeError(
+                "quotes must be a list or tuple of OptionQuote."
+            )
+
+        for quote in quotes:
+            if not isinstance(
+                quote,
+                OptionQuote,
+            ):
+                raise TypeError(
+                    "quotes must contain OptionQuote."
+                )
+
+        if not isinstance(
+            parameters,
+            BatchValuationParameters,
+        ):
+            raise TypeError(
+                "parameters must be BatchValuationParameters."
+            )
+
+        batch_valuator = (
+            valuator
+            if valuator is not None
+            else ScannerBatchValuator()
+        )
+
+        result = batch_valuator.scan_and_evaluate(
+            quotes,
+            top_n=top_n,
+            parameters=parameters,
+        )
+
+        self.valuation_result = result
+
+        if hasattr(
+            self,
+            "display_valuation_results",
+        ):
+            self.display_valuation_results(
+                result
+            )
+
+        if hasattr(
+            self,
+            "status_label",
+        ):
+            self.status_label.configure(
+                text=(
+                    f"综合估值完成，共评价 "
+                    f"{result.count} 个合约。"
+                ),
+                text_color=COLOR_SUCCESS,
+            )
+
+        return result
 
     # ======================================================
     # Batch Valuation Result
