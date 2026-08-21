@@ -22,6 +22,10 @@ from data.market_data_adapter import (
     MarketDataAdapter,
 )
 
+from core.scanner_batch_valuation import (
+    BatchValuationResult,
+)
+
 from models.option_scanner import (
     OptionContract,
     OptionDirection,
@@ -117,6 +121,10 @@ class ScannerPage(ctk.CTkFrame):
         self.selected_contracts: list[
             OptionContract
         ] = []
+
+        self.valuation_result: (
+            BatchValuationResult | None
+        ) = None
 
         self.scanner: OptionScanner | None = None
 
@@ -819,6 +827,168 @@ class ScannerPage(ctk.CTkFrame):
                 )
 
     # ======================================================
+    # Batch Valuation Result
+    # ======================================================
+
+    @staticmethod
+    def build_valuation_display_rows(
+        batch_result: BatchValuationResult,
+    ) -> list[dict[str, str]]:
+        """
+        Convert an existing batch valuation result into UI rows.
+
+        This method deliberately consumes the already-computed
+        ``BatchValuationResult``. It does not perform valuation,
+        risk analysis, or recommendation calculations.
+
+        The scanner UI therefore remains independent from the
+        valuation calculation pipeline.
+        """
+
+        if not isinstance(
+            batch_result,
+            BatchValuationResult,
+        ):
+            raise TypeError(
+                "batch_result must be a BatchValuationResult."
+            )
+
+        rows: list[dict[str, str]] = []
+
+        for item in batch_result.items:
+            evaluation = item.result.comprehensive_evaluation
+
+            if evaluation is None:
+                rows.append(
+                    {
+                        "symbol": item.symbol,
+                        "option_type": item.option_type,
+                        "volume": str(item.volume),
+                        "theoretical_price": (
+                            f"{item.result.current_theoretical_price:.6f}"
+                        ),
+                        "score": "--",
+                        "decision": "--",
+                        "risk_level": "--",
+                        "reason": "暂无综合评价结果。",
+                    }
+                )
+                continue
+
+            rows.append(
+                {
+                    "symbol": item.symbol,
+                    "option_type": item.option_type,
+                    "volume": str(item.volume),
+                    "theoretical_price": (
+                        f"{item.result.current_theoretical_price:.6f}"
+                    ),
+                    "score": f"{evaluation.score:.2f}",
+                    "decision": evaluation.decision.value,
+                    "risk_level": evaluation.risk_level.value,
+                    "reason": evaluation.reason_text,
+                }
+            )
+
+        return rows
+
+    def display_valuation_results(
+        self,
+        batch_result: BatchValuationResult,
+    ) -> None:
+        """
+        Display an existing scanner batch valuation result.
+
+        This is a presentation-only boundary. The batch valuation
+        must already have been performed by ``ScannerBatchValuator``.
+        """
+
+        self.valuation_result = batch_result
+
+        self.clear_result_widgets()
+
+        rows = self.build_valuation_display_rows(
+            batch_result
+        )
+
+        if hasattr(self, "summary_label"):
+            self.summary_label.configure(
+                text=(
+                    f"综合估值完成，共评价 "
+                    f"{len(rows)} 个合约。"
+                )
+            )
+
+        columns = (
+            "symbol",
+            "option_type",
+            "volume",
+            "theoretical_price",
+            "score",
+            "decision",
+            "risk_level",
+            "reason",
+        )
+
+        titles = {
+            "symbol": "合约代码",
+            "option_type": "类型",
+            "volume": "成交量",
+            "theoretical_price": "理论价格",
+            "score": "综合评分",
+            "decision": "综合结论",
+            "risk_level": "风险等级",
+            "reason": "评价原因",
+        }
+
+        for column, key in enumerate(columns):
+            label = ctk.CTkLabel(
+                self.table_frame,
+                text=titles[key],
+                text_color=COLOR_TEXT_SECONDARY,
+                font=(
+                    FONT_FAMILY,
+                    FONT_SMALL_SIZE,
+                    "bold",
+                ),
+                anchor="w",
+            )
+            label.grid(
+                row=0,
+                column=column,
+                padx=6,
+                pady=6,
+                sticky="w",
+            )
+            self.result_labels.append(label)
+
+        for row_number, row_data in enumerate(
+            rows,
+            start=1,
+        ):
+            for column, key in enumerate(columns):
+                label = ctk.CTkLabel(
+                    self.table_frame,
+                    text=row_data[key],
+                    text_color=COLOR_TEXT,
+                    font=(
+                        FONT_FAMILY,
+                        FONT_SMALL_SIZE,
+                    ),
+                    anchor="w",
+                    justify="left",
+                    wraplength=320 if key == "reason" else 0,
+                )
+                label.grid(
+                    row=row_number,
+                    column=column,
+                    padx=6,
+                    pady=5,
+                    sticky="w",
+                )
+                self.result_labels.append(label)
+
+    # ======================================================
     # Result Reset
     # ======================================================
 
@@ -851,6 +1021,8 @@ class ScannerPage(ctk.CTkFrame):
         """Reset scanner result state."""
 
         self.selected_contracts = []
+
+        self.valuation_result = None
 
         self.scanner = None
 
@@ -943,6 +1115,8 @@ class ScannerPage(ctk.CTkFrame):
 
         self.selected_contracts = []
 
+        self.valuation_result = None
+
         self.scanner = None
 
         self.clear_result_widgets()
@@ -993,6 +1167,8 @@ class ScannerPage(ctk.CTkFrame):
 
         self.selected_contracts = []
 
+        self.valuation_result = None
+
         self.scanner = None
 
         self.clear_result_widgets()
@@ -1036,6 +1212,9 @@ class ScannerPage(ctk.CTkFrame):
             ),
             "has_scanner": (
                 self.scanner is not None
+            ),
+            "has_valuation_result": (
+                self.valuation_result is not None
             ),
         }
 
