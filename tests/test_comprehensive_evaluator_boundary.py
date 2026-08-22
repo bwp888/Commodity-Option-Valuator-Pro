@@ -103,7 +103,7 @@ from models.risk import RiskLevel
 
 
 @dataclass
-class TestValuationResult:
+class FixtureValuationResult:
     """
     Local test object matching the actual duck-typed
     ComprehensiveEvaluator contract.
@@ -146,7 +146,7 @@ def make_result(
     current production duck-typed contract.
     """
 
-    return TestValuationResult(
+    return FixtureValuationResult(
         symbol=symbol,
         current_option_price=current_option_price,
         current_theoretical_price=current_theoretical_price,
