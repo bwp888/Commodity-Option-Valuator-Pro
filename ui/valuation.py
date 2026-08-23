@@ -1136,8 +1136,12 @@ class ValuationPage(ctk.CTkFrame):
                 "期权类型必须为 CALL 或 PUT。"
             )
 
-        current_volatility = float(
+        current_volatility_percent = float(
             parameters["volatility"]
+        )
+
+        current_volatility = (
+            current_volatility_percent / 100.0
         )
 
         # --------------------------------------------------
