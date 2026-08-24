@@ -434,7 +434,26 @@ class ValuationPage(ctk.CTkFrame):
 
         self.volatility_entry = self.create_entry(
             row=5,
-            placeholder="例如 0.20",
+            placeholder="?? 20",
+        )
+
+        self.volatility_percent_label = ctk.CTkLabel(
+            self.parameter_section.content,
+            text="%",
+            text_color=COLOR_TEXT_SECONDARY,
+            font=(
+                FONT_FAMILY,
+                FONT_BODY_SIZE,
+            ),
+            anchor="w",
+        )
+
+        self.volatility_percent_label.grid(
+            row=5,
+            column=2,
+            padx=(6, 8),
+            pady=6,
+            sticky="w",
         )
 
         self.create_parameter_label(
