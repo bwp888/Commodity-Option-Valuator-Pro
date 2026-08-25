@@ -14,6 +14,7 @@ Version : 0.2.2
 from __future__ import annotations
 
 import math
+import pytest
 
 from core.valuation_engine import (
     ValuationResult,
@@ -380,3 +381,42 @@ def test_result_keys():
         ==
         expected
     )
+
+def test_build_single_option_input_applies_reference_volatility_change():
+    parameters = {
+        "symbol": "SR609C5600",
+        "spot": 5600.0,
+        "strike": 5600.0,
+        "market_price": 120.0,
+        "days": 30,
+        "volatility": 19.54,
+        "reference_volatility_change": 0.1067,
+        "target_futures_price": 5700.0,
+        "rate": 0.025,
+        "direction": OptionDirection.CALL,
+    }
+
+    page = ValuationPage.__new__(
+        ValuationPage
+    )
+
+    result = page.build_single_option_input(
+        parameters
+    )
+
+    assert (
+        result.reference_volatility.current
+        == pytest.approx(1.0)
+    )
+
+    assert (
+        result.reference_volatility.target
+        == pytest.approx(1.1067)
+    )
+
+    assert (
+        result.current_option_iv
+        == pytest.approx(0.1954)
+    )
+
+

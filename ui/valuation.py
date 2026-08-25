@@ -434,7 +434,7 @@ class ValuationPage(ctk.CTkFrame):
 
         self.volatility_entry = self.create_entry(
             row=5,
-            placeholder="?? 20",
+            placeholder="20",
         )
 
         self.volatility_percent_label = ctk.CTkLabel(
@@ -509,13 +509,44 @@ class ValuationPage(ctk.CTkFrame):
         )
 
         self.create_parameter_label(
-            row=8,
+            row=9,
             text="目标期货价格",
+        )
+
+        self.create_parameter_label(
+            row=8,
+            text="\u53c2\u8003\u6ce2\u52a8\u7387\u53d8\u5316",
+        )
+
+        self.reference_volatility_change_entry = (
+            self.create_entry(
+                row=8,
+                placeholder="10.67",
+            )
+        )
+
+        self.reference_volatility_percent_label = ctk.CTkLabel(
+            self.parameter_section.content,
+            text="%",
+            text_color=COLOR_TEXT_SECONDARY,
+            font=(
+                FONT_FAMILY,
+                FONT_BODY_SIZE,
+            ),
+            anchor="w",
+        )
+
+        self.reference_volatility_percent_label.grid(
+            row=8,
+            column=2,
+            padx=(6, 8),
+            pady=6,
+            sticky="w",
         )
 
         self.target_futures_price_entry = (
             self.create_entry(
-                row=8,
+                row=9,
                 placeholder="用户手动输入，例如 3600",
             )
         )
@@ -531,7 +562,7 @@ class ValuationPage(ctk.CTkFrame):
         )
 
         self.valuate_button.grid(
-            row=9,
+            row=10,
             column=0,
             columnspan=2,
             padx=8,
@@ -560,7 +591,7 @@ class ValuationPage(ctk.CTkFrame):
         )
 
         self.parameter_hint.grid(
-            row=10,
+            row=11,
             column=0,
             columnspan=2,
             padx=8,
@@ -770,6 +801,11 @@ class ValuationPage(ctk.CTkFrame):
                 .get()
                 .strip()
             ),
+            "reference_volatility_change": (
+                self.reference_volatility_change_entry
+                .get()
+                .strip()
+            ),
             "target_futures_price": (
                 self.target_futures_price_entry
                 .get()
@@ -823,18 +859,41 @@ class ValuationPage(ctk.CTkFrame):
                 "请输入合约代码。"
             )
 
-        direction_value = parameters.get(
+        direction = parameters.get(
             "direction",
             "",
-        ).strip().upper()
+        )
+
+        if isinstance(
+            direction,
+            OptionDirection,
+        ):
+            direction_value = (
+                direction.value.upper()
+            )
+
+        elif isinstance(
+            direction,
+            str,
+        ):
+            direction_value = (
+                direction.strip().upper()
+            )
+
+        else:
+            direction_value = ""
 
         if direction_value not in {
             "CALL",
             "PUT",
         }:
             raise ValueError(
-                "期权方向必须为 CALL 或 PUT。"
+                "??????? CALL ? PUT?"
             )
+
+        direction = OptionDirection(
+            direction_value
+        )
 
         # --------------------------------------------------
         # Current futures price
@@ -943,6 +1002,26 @@ class ValuationPage(ctk.CTkFrame):
         #     omitted / blank -> current futures price
         #
 
+        reference_change_text = parameters.get(
+            "reference_volatility_change",
+            "",
+        ).strip()
+
+        if not reference_change_text:
+            reference_volatility_change = 0.0
+        else:
+            try:
+                reference_volatility_change = (
+                    float(reference_change_text) / 100.0
+                )
+            except (
+                TypeError,
+                ValueError,
+            ) as exc:
+                raise ValueError(
+                    "Reference volatility change must be a valid number."
+                ) from exc
+
         target_text = parameters.get(
             "target_futures_price",
             "",
@@ -1037,6 +1116,12 @@ class ValuationPage(ctk.CTkFrame):
                 "波动率必须大于 0。"
             )
 
+        if reference_volatility_change <= -1.0:
+
+            raise ValueError(
+                "Reference volatility change cannot make target IV <= 0."
+            )
+
         if target_futures_price <= 0:
 
             raise ValueError(
@@ -1059,6 +1144,9 @@ class ValuationPage(ctk.CTkFrame):
             "market_price": market_price,
             "days": days,
             "volatility": volatility,
+            "reference_volatility_change": (
+                reference_volatility_change
+            ),
             "target_futures_price": (
                 target_futures_price
             ),
@@ -1185,10 +1273,20 @@ class ValuationPage(ctk.CTkFrame):
         # SingleOptionValuator.
         #
 
+        reference_volatility_change = float(
+            parameters.get(
+                "reference_volatility_change",
+                0.0,
+            )
+        )
+
         reference_volatility = (
             ReferenceVolatilityScenario(
-                current=current_volatility,
-                target=current_volatility,
+                current=1.0,
+                target=(
+                    1.0
+                    + reference_volatility_change
+                ),
             )
         )
 
