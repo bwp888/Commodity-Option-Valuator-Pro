@@ -1255,22 +1255,26 @@ class ValuationPage(ctk.CTkFrame):
         # Reference volatility
         # --------------------------------------------------
         #
-        # At the current stage there is no separate
-        # reference-volatility input in the UI.
+        # The UI accepts the relative change of the
+        # reference volatility as a percentage.
         #
-        # Therefore:
+        # Example:
         #
-        #     current reference volatility
-        #         = current option IV
+        #     reference volatility change = 10.67%
         #
-        #     target reference volatility
-        #         = current option IV
+        # The core ReferenceVolatilityScenario only needs
+        # the relative ratio:
         #
-        # This creates a neutral volatility scenario.
+        #     current = 1.0
+        #     target  = 1.0 + relative_change
         #
-        # The core architecture remains ready for a future
-        # TDX/reference-volatility source without changing
-        # SingleOptionValuator.
+        # Therefore the selected option IV is adjusted by
+        # the same relative change.
+        #
+        # Example:
+        #
+        #     19.54% ? (1 + 10.67%)
+        #         ? 21.62%
         #
 
         reference_volatility_change = float(
