@@ -340,6 +340,49 @@ def test_evaluate_calculates_taylor_prices() -> None:
     )
 
 
+def test_evaluate_populates_comprehensive_evaluation() -> None:
+    valuator = SingleOptionValuator()
+
+    result = valuator.evaluate(
+        make_valid_input()
+    )
+
+    assert result.comprehensive_evaluation is not None
+
+    evaluation = result.comprehensive_evaluation
+
+    assert evaluation.symbol == result.symbol
+    assert math.isfinite(evaluation.score)
+    assert math.isfinite(evaluation.risk_score)
+
+    assert evaluation.components is not None
+    assert evaluation.reasons
+
+
+def test_comprehensive_evaluation_uses_single_option_result() -> None:
+    valuator = SingleOptionValuator()
+
+    result = valuator.evaluate(
+        make_valid_input()
+    )
+
+    evaluation = result.comprehensive_evaluation
+
+    assert evaluation is not None
+
+    assert (
+        evaluation.symbol
+        ==
+        result.symbol
+    )
+
+    assert (
+        evaluation.components.total_score
+        ==
+        evaluation.score
+    )
+
+
 # ==========================================================
 # Result Calculations
 # ==========================================================
