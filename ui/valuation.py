@@ -1525,6 +1525,13 @@ class ValuationPage(ctk.CTkFrame):
             - result.current_option_price
         )
 
+        evaluation = result.comprehensive_evaluation
+
+        if evaluation is None:
+            risk_score = "--"
+        else:
+            risk_score = f"{evaluation.risk_score:.6f}"
+
         values = {
             "theoretical_price": (
                 f"{result.target_theoretical_price:.6f}"
@@ -1542,9 +1549,7 @@ class ValuationPage(ctk.CTkFrame):
             "difference": (
                 f"{difference:.6f}"
             ),
-            "risk_score": (
-                f"{abs(difference):.6f}"
-            ),
+            "risk_score": risk_score,
         }
 
         for key, value in values.items():
