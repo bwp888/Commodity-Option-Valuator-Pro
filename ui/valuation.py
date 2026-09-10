@@ -1545,7 +1545,7 @@ class ValuationPage(ctk.CTkFrame):
             "theta": (
                 f"{result.target_theta:.6f}"
             ),
-            "vega": "--",
+            "vega": f"{result.target_vega:.6f}",
             "difference": (
                 f"{difference:.6f}"
             ),

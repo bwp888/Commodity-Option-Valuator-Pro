@@ -376,10 +376,12 @@ class SingleOptionValuationResult:
     current_delta: float
     current_gamma: float
     current_theta: float
+    current_vega: float
 
     target_delta: float
     target_gamma: float
     target_theta: float
+    target_vega: float
 
     taylor_first_order_price: float
     taylor_second_order_price: float
@@ -491,9 +493,11 @@ class SingleOptionValuationResult:
             "current_delta": self.current_delta,
             "current_gamma": self.current_gamma,
             "current_theta": self.current_theta,
+            "current_vega": self.current_vega,
             "target_delta": self.target_delta,
             "target_gamma": self.target_gamma,
             "target_theta": self.target_theta,
+            "target_vega": self.target_vega,
             "taylor_first_order_price": (
                 self.taylor_first_order_price
             ),
@@ -725,9 +729,11 @@ class SingleOptionValuator:
             current_delta=current_greeks.delta,
             current_gamma=current_greeks.gamma,
             current_theta=current_greeks.theta,
+            current_vega=current_greeks.vega,
             target_delta=target_greeks.delta,
             target_gamma=target_greeks.gamma,
             target_theta=target_greeks.theta,
+            target_vega=target_greeks.vega,
             taylor_first_order_price=(
                 taylor_first_order
             ),
