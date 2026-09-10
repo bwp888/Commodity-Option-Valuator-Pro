@@ -190,6 +190,8 @@ def make_valuation_result(
         target_delta=0.55,
         target_gamma=0.012,
         target_theta=0.011,
+        current_vega=0.1,
+        target_vega=0.1,
         taylor_first_order_price=taylor_first_order_price,
         taylor_second_order_price=taylor_second_order_price,
     )
