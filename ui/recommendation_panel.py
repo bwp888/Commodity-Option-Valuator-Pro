@@ -4,11 +4,14 @@ Commodity Option Valuator Pro
 
 Recommendation Panel.
 
-Commit 0023
+Commit 0024
 -----------
 
 Provides the CustomTkinter presentation panel for
 RecommendationReportPresentation.
+
+Also provides Excel export from the recommendation
+report presentation.
 
 Architecture
 ------------
@@ -38,17 +41,27 @@ It does not:
     - modify summary values.
 
 Author : Simon
-Version : 0.6.3
+Version : 0.6.4
 Python : 3.12
 """
 
 from __future__ import annotations
+
+from tkinter import filedialog
 
 import customtkinter as ctk
 
 from core.recommendation_report_presentation import (
     RecommendationReportPresentation,
     RecommendationReportPresentationRow,
+)
+
+from reports.excel_export import (
+    export_recommendation_report,
+)
+
+from ui.components import (
+    PrimaryButton,
 )
 
 from ui.styles import (
@@ -167,6 +180,10 @@ class RecommendationPanel(ctk.CTkFrame):
             0,
             weight=1,
         )
+        self.header_frame.grid_columnconfigure(
+            1,
+            weight=0,
+        )
 
         self.title_label = ctk.CTkLabel(
             self.header_frame,
@@ -211,6 +228,21 @@ class RecommendationPanel(ctk.CTkFrame):
                 0,
                 CARD_PADDING,
             ),
+        )
+
+        self.export_button = PrimaryButton(
+            self.header_frame,
+            text="导出 Excel",
+            command=self.export_excel,
+        )
+
+        self.export_button.grid(
+            row=0,
+            column=1,
+            rowspan=2,
+            sticky="e",
+            padx=CARD_PADDING,
+            pady=CARD_PADDING,
         )
 
     def _build_metrics(self) -> None:
@@ -679,6 +711,10 @@ class RecommendationPanel(ctk.CTkFrame):
             presentation
         )
 
+        self.export_button.configure(
+            state="normal"
+        )
+
     def clear(self) -> None:
         """
         Clear all displayed recommendation data.
@@ -733,6 +769,42 @@ class RecommendationPanel(ctk.CTkFrame):
         )
 
         self._clear_table()
+
+        self.export_button.configure(
+            state="disabled"
+        )
+
+    def export_excel(self):
+        """
+        Open the Windows save dialog and export the current
+        recommendation report as an Excel workbook.
+
+        Returns:
+            The path returned by export_recommendation_report,
+            or None when there is no presentation or the user
+            cancels the save dialog.
+        """
+
+        if self._presentation is None:
+            return None
+
+        output_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=(
+                (
+                    "Excel 文件",
+                    "*.xlsx",
+                ),
+            ),
+        )
+
+        if not output_path:
+            return None
+
+        return export_recommendation_report(
+            self._presentation,
+            output_path,
+        )
 
     # ======================================================
     # Rendering
